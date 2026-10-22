@@ -275,7 +275,9 @@ for i, (ch, score) in enumerate(zip("hello", attn_logits)):
 # Apply softmax to the scaled attention logits to convert them into attention weights.
 # The resulting weights form a probability distribution and sum to 1.
 
-attn_weights = softmax(attn_logits)
+attn_weights = softmax(
+    attn_logits
+)
 print(f"'h'의 어텐션 가중치 (헤드0, softmax 후):")
 for ch, w in zip("hello", attn_weights):
     print(f"  'h' → '{ch}': {round(w.data, 4)}")
@@ -283,6 +285,7 @@ print(f"  합계: {round(sum(w.data for w in attn_weights), 4)}")
 # 합계: 1.0
 
 # 02_1_09
+
 # Weight each character's value vector by its attention score and sum them.
 # The result is the first character's context-aware output for attention head 0.
 
@@ -294,3 +297,88 @@ head_out = [
 print(f"'h'의 어텐션 출력 (헤드0): {[round(v.data, 4) for v in head_out]}")
 
 # 'h'의 어텐션 출력 (헤드0): [-0.0084, -0.0168, 0.0014, 0.016]
+
+# 02_1_10
+# Compute scaled dot-product attention independently across all heads, then concatenate their outputs.
+# Apply the output projection to return the combined attention result to the embedding dimension.
+
+def multi_head_attention(q_in, k_list, v_list, wq, wk, wv, wo):
+    """Multi-Head Attention.
+    q_in: 쿼리 벡터 (16차원)
+    k_list: 키 벡터들의 리스트 (각 16차원)
+    v_list: 값 벡터들의 리스트 (각 16차원)
+    wq, wk, wv: Q, K, V 가중치 행렬 (각 16×16)
+    wo: 출력 가중치 행렬 (16×16)
+    """
+    q = linear(q_in, wq) # Q, K, V
+    ks = [linear(ki, wk) for ki in k_list]
+    vs = [linear(vi, wv) for vi in v_list]
+
+    x_attn = []
+    for h in range(n_head): # head가 4개.
+
+        hs = h * head_dim
+        q_h = q[hs:hs+head_dim]
+        k_h = [ki[hs:hs+head_dim] for ki in ks]
+        v_h = [vi[hs:hs+head_dim] for vi in vs] # 각각 attn_logits 계산.
+
+        attn_logits = [
+            sum(q_h[j] * k_h[t][j] for j in range(head_dim)) / head_dim**0.5
+            for t in range(len(k_h))
+        ]
+        attn_weights = softmax(
+            attn_logits
+        )
+        head_out = [
+            sum(attn_weights[t] * v_h[t][j] for t in range(len(v_h))) # 헤드 출력 이어 붙임.
+            for j in range(head_dim)
+        ]
+        x_attn.extend(head_out)
+    return linear(x_attn, wo) # 출력 가중치 적용.
+
+# 02_1_11
+
+# Run multi-head self-attention for each token in "hello", using the full sequence as keys and values.
+# Collect and print one context-aware output vector per input token.
+
+# hello"의 각 문자를 쿼리로 사용해 전체 문자열에 셀프 어텐션을 적용
+
+print(f"입력: 'hello' ({len(hello_vecs)}개 토큰, 각 {len(hello_vecs[0])}차원)")
+
+# 입력 토큰마다 하나씩, 총 5개의 16차원 벡터
+mha_outputs = []
+for i, xv in enumerate(hello_vecs):
+    out = multi_head_attention(xv, hello_vecs, hello_vecs, enc_wq, enc_wk, enc_wv, enc_wo)
+    mha_outputs.append(out)
+    ch = "hello"[i]
+    print(f"  '{ch}' MHA 출력 (처음 4개): {[round(v.data, 4) for v in out[:4]]}")
+print(f"출력: {len(mha_outputs)}개 토큰, 각 {len(mha_outputs[0])}차원")
+
+# 입력: 'hello' (5개 토큰, 각 16차원)
+#   'h' MHA 출력 (처음 4개): [0.0002, 0.0015, 0.0014, 0.0039]
+#   'e' MHA 출력 (처음 4개): [0.0002, 0.0015, 0.0013, 0.0038]
+#   'l' MHA 출력 (처음 4개): [0.0002, 0.0015, 0.0014, 0.0038]
+#   'l' MHA 출력 (처음 4개): [0.0002, 0.0015, 0.0014, 0.0038]
+#   'o' MHA 출력 (처음 4개): [0.0002, 0.0015, 0.0013, 0.0038]
+
+# 출력: 5개 토큰, 각 16차원
+
+# 02_1_12
+
+# RMSNorm 동작 확인 (일반 숫자로 원리 확인)
+
+def rmsnorm_plain(x):
+    """일반 float용 RMSNorm — 원리 확인용"""
+    ms = sum(xi * xi for xi in x) / len(x)
+    scale = (ms + 1e-5) ** -0.5
+    return [xi * scale for xi in x]
+
+x_big = [150.0, 280.0, 320.0]
+x_big_after = rmsnorm_plain(x_big)
+print(f"정규화 전: {x_big}")
+print(f"정규화 후: {[round(v, 4) for v in x_big_after]}")
+
+x_small = [0.01, 0.02, 0.03]
+x_small_after = rmsnorm_plain(x_small)
+print(f"정규화 전: {x_small}")
+print(f"정규화 후: {[round(v, 4) for v in x_small_after]}")
