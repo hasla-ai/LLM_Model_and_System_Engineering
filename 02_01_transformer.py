@@ -65,6 +65,7 @@ class Value:
                 child.grad += local_grad * v.grad
 
 # 02_1_2
+
 # Create a small set of English-to-Korean sentence pairs for a toy translation task.
 # These examples provide the parallel text data used by the model.
 
@@ -123,3 +124,57 @@ print(f"역토큰화:    {tokenize('hello')} → '{detokenize(tokenize('hello'))
 # 역토큰화:    [8, 6, 11, 11, 14] → 'hello'
 
 # 02_1_3
+# Define linear, softmax, and RMSNorm utilities, then set the model dimensions.
+# Initialize token and encoder/decoder position embedding matrices for the toy model.
+
+# 핵심 함수 세 가지 (트랜스포머 전체에서 반복 사용)
+def linear(x, w):
+    """벡터 x에 가중치 행렬 w를 곱한다. 어텐션, MLP 등 모든 변환에 사용."""
+    return [sum(wi * xi for wi, xi in zip(wo, x)) for wo in w]
+
+def softmax(logits):
+    """숫자 목록을 확률 분포(합=1)로 변환한다. 어텐션 가중치와 출력 확률 계산에 사용."""
+    max_val = max(v.data if isinstance(v, Value) else v for v in logits)
+    exps = [(v - max_val).exp() if isinstance(v, Value) else Value(math.exp(v - max_val)) for v in logits]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+def rmsnorm(x):
+    """벡터의 크기를 정규화한다. 트랜스포머 블록 내부에서 값의 안정성을 유지하는 데 사용."""
+    ms = sum(xi * xi for xi in x) / len(x)
+    scale = (ms + 1e-5) ** -0.5
+    return [xi * scale for xi in x]
+
+# 하이퍼파라미터
+n_embd = 16                    # 임베딩 차원: 각 토큰을 표현하는 벡터의 크기
+n_head = 4                     # 어텐션 헤드 수: 서로 다른 관점으로 문맥을 파악하는 병렬 어텐션
+head_dim = n_embd // n_head    # 헤드당 차원: 16 ÷ 4 = 4
+
+# 가중치 행렬 초기화 함수
+def matrix(nout, nin, std=0.08):
+    """nout×nin 크기의 가중치 행렬을 작은 난수로 초기화한다."""
+    return [[Value(random.gauss(0, std)) for _ in range(nin)] for _ in range(nout)]
+
+# 임베딩 행렬
+wte = matrix(vocab_size, n_embd)      # 토큰 임베딩: 각 토큰 ID → 16차원 벡터 (73×16)
+wpe_enc = matrix(max_enc_len, n_embd) # 인코더 위치 임베딩: 각 위치 → 16차원 벡터
+wpe_dec = matrix(max_dec_len, n_embd) # 디코더 위치 임베딩: 각 위치 → 16차원 벡터
+
+# 02_1_4
+# Look up and combine the token and position embeddings for the first character of "hello".
+# Print sample values to verify the embedding lookup and vector addition.
+
+tok_id = tokenize("h")[0]
+tok_emb = wte[tok_id]
+pos_emb = wpe_enc[0]
+x = [t + p for t, p in zip(tok_emb, pos_emb)]
+
+print(f"'h'의 토큰 ID: {tok_id}")
+print(f"토큰 임베딩 (처음 4개): {[round(v.data, 4) for v in tok_emb[:4]]}")
+print(f"위치 임베딩 (처음 4개): {[round(v.data, 4) for v in pos_emb[:4]]}")
+print(f"합산 결과   (처음 4개): {[round(v.data, 4) for v in x[:4]]}")
+
+# 'h'의 토큰 ID: 8
+# 토큰 임베딩 (처음 4개): [0.1093, -0.1043, -0.0098, 0.0259]
+# 위치 임베딩 (처음 4개): [0.0677, 0.0033, 0.0105, 0.0422]
+# 합산 결과   (처음 4개): [0.1769, -0.101, 0.0007, 0.068]
