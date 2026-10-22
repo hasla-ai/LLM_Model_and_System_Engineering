@@ -53,6 +53,17 @@ This is an independent learning project and is not affiliated with or endorsed b
 
 This project uses Python 3.12 or later and [uv](https://docs.astral.sh/uv/). Direct dependencies are declared in [pyproject.toml](pyproject.toml), with resolved versions recorded in [uv.lock](uv.lock). Source files stay in the repository root rather than being split into topic folders.
 
+| 패키지 | 버전 | 용도 |
+| --- | --- | --- |
+| `transformers` | 4.55.0 | 토크나이저·모델 로드와 추론 · Tokenizers, model loading, and inference |
+| `accelerate` | 1.8.1 | `device_map`으로 모델을 장치에 나눠 올리기 · Device placement for large models |
+| `bitsandbytes` | 0.46.0 | 8비트·4비트 양자화 로드 · 8-bit and 4-bit quantized loading |
+| `torch` | 2.14.1 이상 | 텐서 연산과 `return_tensors="pt"` 출력 · Tensor backend |
+
+의존성을 추가할 때는 `pip install` 대신 `uv add 패키지==버전`을 사용합니다. 그러면 `pyproject.toml`과 `uv.lock`이 함께 갱신됩니다. `bitsandbytes`의 양자화는 NVIDIA GPU와 CUDA용 PyTorch가 있어야 동작합니다. 기본 설치되는 CPU용 PyTorch에서는 불러올 수만 있고 GPU 양자화는 쓸 수 없습니다.
+
+Add dependencies with `uv add package==version` instead of `pip install` so both `pyproject.toml` and `uv.lock` are updated. Quantization with `bitsandbytes` requires an NVIDIA GPU and a CUDA build of PyTorch. With the default CPU build of PyTorch, it can be imported, but GPU quantization is unavailable.
+
 ```powershell
 # 저장소 폴더에서 실행
 uv sync --package llm-serve

@@ -3,6 +3,8 @@ name = "llm-serve"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "accelerate==1.8.1",
+    "bitsandbytes==0.46.0",
     "torch>=2.14.1",
     "transformers==4.55.0",
 ]
