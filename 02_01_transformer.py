@@ -187,16 +187,21 @@ print(f"합산 결과   (처음 4개): {[round(v.data, 4) for v in x[:4]]}")
 # 인코더 셀프 어텐션 가중치
 enc_wq = matrix(n_embd, n_embd); enc_wk = matrix(n_embd, n_embd)
 enc_wv = matrix(n_embd, n_embd); enc_wo = matrix(n_embd, n_embd)
+
 # 인코더 MLP 가중치
 enc_fc1 = matrix(4*n_embd, n_embd); enc_fc2 = matrix(n_embd, 4*n_embd)
+
 # 디코더 셀프 어텐션 가중치
 dec_wq = matrix(n_embd, n_embd); dec_wk = matrix(n_embd, n_embd)
 dec_wv = matrix(n_embd, n_embd); dec_wo = matrix(n_embd, n_embd)
+
 # 디코더 크로스 어텐션 가중치
 cross_wq = matrix(n_embd, n_embd); cross_wk = matrix(n_embd, n_embd)
 cross_wv = matrix(n_embd, n_embd); cross_wo = matrix(n_embd, n_embd)
+
 # 디코더 MLP 가중치
 dec_fc1 = matrix(4*n_embd, n_embd); dec_fc2 = matrix(n_embd, 4*n_embd)
+
 # 출력 헤드 (디코더 출력을 어휘 크기의 확률 분포로 변환)
 lm_head = matrix(vocab_size, n_embd)
 
@@ -206,6 +211,34 @@ all_matrices = [wte, wpe_enc, wpe_dec,
                 dec_wq, dec_wk, dec_wv, dec_wo,
                 cross_wq, cross_wk, cross_wv, cross_wo,
                 dec_fc1, dec_fc2, lm_head]
+
 params = [p for mat in all_matrices for row in mat for p in row]
 
 print(f"전체 파라미터 수: {len(params)}") # 전체 파라미터 수: 9888
+
+# 02_1_6
+# Add encoder position embeddings to each character embedding in "hello".
+# Project the first character's input vector into query, key, and value vectors.
+
+# "hello"의 각 문자를 임베딩+위치인코딩
+
+hello_tokens = tokenize("hello") # 문자 토큰 ID
+hello_vecs = []
+for pos, tid in enumerate(hello_tokens):
+    te = wte[tid]   # 토큰 임베딩
+    pe = wpe_enc[pos] # 인코더 위치 임베딩
+    hello_vecs.append([t + p for t, p in zip(te, pe)]) # 입력 벡터 = 토큰 임베딩 + 인코더 위치 임베딩
+
+# 'h'의 Q, K, V 생성
+
+q0 = linear(hello_vecs[0], enc_wq)
+k0 = linear(hello_vecs[0], enc_wk)
+v0 = linear(hello_vecs[0], enc_wv)
+
+print(f"'h'의 Q (처음 4개): {[round(v.data, 4) for v in q0[:4]]}")
+print(f"'h'의 K (처음 4개): {[round(v.data, 4) for v in k0[:4]]}")
+print(f"'h'의 V (처음 4개): {[round(v.data, 4) for v in v0[:4]]}")
+
+# 'h'의 Q (처음 4개): [-0.0446, -0.0594, 0.0058, -0.0094]
+# 'h'의 K (처음 4개): [-0.0135, 0.1147, -0.0469, -0.0175]
+# 'h'의 V (처음 4개): [0.0111, 0.0075, 0.0316, 0.0137]
