@@ -270,3 +270,27 @@ for i, (ch, score) in enumerate(zip("hello", attn_logits)):
 #   'h' → 'l': -0.0004
 #   'h' → 'l': 0.0008
 #   'h' → 'o': -0.0014
+
+# 02_1_08
+# Apply softmax to the scaled attention logits to convert them into attention weights.
+# The resulting weights form a probability distribution and sum to 1.
+
+attn_weights = softmax(attn_logits)
+print(f"'h'의 어텐션 가중치 (헤드0, softmax 후):")
+for ch, w in zip("hello", attn_weights):
+    print(f"  'h' → '{ch}': {round(w.data, 4)}")
+print(f"  합계: {round(sum(w.data for w in attn_weights), 4)}")
+# 합계: 1.0
+
+# 02_1_09
+# Weight each character's value vector by its attention score and sum them.
+# The result is the first character's context-aware output for attention head 0.
+
+v_h = [vi[0:head_dim] for vi in all_vs]
+head_out = [
+    sum(attn_weights[t] * v_h[t][j] for t in range(len(v_h)))
+    for j in range(head_dim)
+]
+print(f"'h'의 어텐션 출력 (헤드0): {[round(v.data, 4) for v in head_out]}")
+
+# 'h'의 어텐션 출력 (헤드0): [-0.0084, -0.0168, 0.0014, 0.016]
