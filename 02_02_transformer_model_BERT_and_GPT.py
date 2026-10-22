@@ -81,6 +81,8 @@ class BERT:
 # GPT uses causal self-attention so each position can use only the current and preceding tokens to predict what comes next.
 # Unlike BERT, this compact decoder has no segment embeddings or cross-attention and returns a vocabulary score vector per position.
 
+# 현재 위치까지의 토큰만 참조하는 인과적 셀프 어텐션과 위치별 어휘 점수 출력을 설명
+
 
 class GPT:
     def __init__(self, vocab_size, n_embd, n_head, n_layer, max_len):
@@ -98,6 +100,7 @@ class GPT:
         for _ in range(n_layer):
             layer = {
                 # ★ 셀프 어텐션만 있음 (크로스 어텐션 없음)
+
                 'wq': matrix(n_embd, n_embd), 'wk': matrix(n_embd, n_embd),
                 'wv': matrix(n_embd, n_embd), 'wo': matrix(n_embd, n_embd),
                 'fc1': matrix(4 * n_embd, n_embd),
@@ -126,6 +129,7 @@ class GPT:
                 x = xs[i]
                 x_norm = rmsnorm(x)
                 # ★ 인과적 마스킹: xs[:i+1]로 현재 위치까지만 참조
+
                 # BERT는 xs 전체를 참조했던 것과 대조적
                 context = [xs[j] for j in range(i + 1)]
                 attn_out = multi_head_attention(
