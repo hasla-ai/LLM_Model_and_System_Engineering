@@ -1,6 +1,9 @@
 #3장 sLLM
 # Chapter 3 Supervised Fine-Tuning (SFT) 및 학습 효율화
 
+# 표 데이터 → 대화 3단 구성 → 템플릿 문자열 → 토큰화 → LoRA 학습 순서
+
+
 # 03_01_1
 
 import os
