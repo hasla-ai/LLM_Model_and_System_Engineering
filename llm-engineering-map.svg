@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">LLM Model and System Engineering learning roadmap</title>
+  <desc id="desc">A five-step roadmap from transformer foundations to fine-tuning, serving, RAG, and agents.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5f8ff"/>
+      <stop offset="1" stop-color="#eef5ff"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1769aa"/>
+      <stop offset="1" stop-color="#12a7a0"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#183b63" flood-opacity=".10"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="420" rx="28" fill="url(#background)"/>
+  <circle cx="1100" cy="42" r="120" fill="#dff4f4" opacity=".7"/>
+  <circle cx="86" cy="390" r="136" fill="#e5eaff" opacity=".8"/>
+  <text x="600" y="60" text-anchor="middle" fill="#15395b" font-family="Segoe UI, Arial, sans-serif" font-size="29" font-weight="700">FROM MODEL TO SYSTEM</text>
+  <text x="600" y="91" text-anchor="middle" fill="#58728c" font-family="Segoe UI, Arial, sans-serif" font-size="16">A hands-on roadmap for learning modern LLM engineering</text>
+  <path d="M155 216 H1045" fill="none" stroke="#b8d3e8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M155 216 H1045" fill="none" stroke="url(#accent)" stroke-width="2" stroke-dasharray="4 12" stroke-linecap="round"/>
+  <g filter="url(#shadow)" font-family="Segoe UI, Arial, sans-serif">
+    <g transform="translate(68 137)">
+      <rect width="190" height="158" rx="20" fill="#fff"/>
+      <circle cx="95" cy="42" r="23" fill="#e6f2ff"/>
+      <text x="95" y="50" text-anchor="middle" fill="#1769aa" font-size="23" font-weight="700">01</text>
+      <text x="95" y="91" text-anchor="middle" fill="#183b5b" font-size="19" font-weight="700">Transformer</text>
+      <text x="95" y="119" text-anchor="middle" fill="#698096" font-size="13">Understand the model</text>
+    </g>
+    <g transform="translate(302 137)">
+      <rect width="190" height="158" rx="20" fill="#fff"/>
+      <circle cx="95" cy="42" r="23" fill="#e8f8f5"/>
+      <text x="95" y="50" text-anchor="middle" fill="#118b83" font-size="23" font-weight="700">02</text>
+      <text x="95" y="91" text-anchor="middle" fill="#183b5b" font-size="19" font-weight="700">Fine-tuning</text>
+      <text x="95" y="119" text-anchor="middle" fill="#698096" font-size="13">SFT · VLM · Tool calling</text>
+    </g>
+    <g transform="translate(536 137)">
+      <rect width="190" height="158" rx="20" fill="#fff"/>
+      <circle cx="95" cy="42" r="23" fill="#e6f2ff"/>
+      <text x="95" y="50" text-anchor="middle" fill="#1769aa" font-size="23" font-weight="700">03</text>
+      <text x="95" y="91" text-anchor="middle" fill="#183b5b" font-size="19" font-weight="700">Serving</text>
+      <text x="95" y="119" text-anchor="middle" fill="#698096" font-size="13">Inference · vLLM</text>
+    </g>
+    <g transform="translate(770 137)">
+      <rect width="190" height="158" rx="20" fill="#fff"/>
+      <circle cx="95" cy="42" r="23" fill="#e8f8f5"/>
+      <text x="95" y="50" text-anchor="middle" fill="#118b83" font-size="23" font-weight="700">04</text>
+      <text x="95" y="91" text-anchor="middle" fill="#183b5b" font-size="19" font-weight="700">RAG &amp; Reasoning</text>
+      <text x="95" y="119" text-anchor="middle" fill="#698096" font-size="13">Retrieval · Reinforcement</text>
+    </g>
+    <g transform="translate(1004 137)">
+      <rect width="150" height="158" rx="20" fill="#fff"/>
+      <circle cx="75" cy="42" r="23" fill="#e6f2ff"/>
+      <text x="75" y="50" text-anchor="middle" fill="#1769aa" font-size="23" font-weight="700">05</text>
+      <text x="75" y="91" text-anchor="middle" fill="#183b5b" font-size="19" font-weight="700">Agents</text>
+      <text x="75" y="119" text-anchor="middle" fill="#698096" font-size="13">Build the system</text>
+    </g>
+  </g>
+  <text x="600" y="358" text-anchor="middle" fill="#1769aa" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">LEARN  ·  IMPLEMENT  ·  EXPERIMENT</text>
+  <text x="600" y="385" text-anchor="middle" fill="#698096" font-family="Segoe UI, Arial, sans-serif" font-size="14">이해하고, 구현하고, 직접 실험하기</text>
+</svg>
