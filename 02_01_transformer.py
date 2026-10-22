@@ -161,6 +161,7 @@ wpe_enc = matrix(max_enc_len, n_embd) # 인코더 위치 임베딩: 각 위치 �
 wpe_dec = matrix(max_dec_len, n_embd) # 디코더 위치 임베딩: 각 위치 → 16차원 벡터
 
 # 02_1_4
+
 # Look up and combine the token and position embeddings for the first character of "hello".
 # Print sample values to verify the embedding lookup and vector addition.
 
@@ -178,3 +179,33 @@ print(f"합산 결과   (처음 4개): {[round(v.data, 4) for v in x[:4]]}")
 # 토큰 임베딩 (처음 4개): [0.1093, -0.1043, -0.0098, 0.0259]
 # 위치 임베딩 (처음 4개): [0.0677, 0.0033, 0.0105, 0.0422]
 # 합산 결과   (처음 4개): [0.1769, -0.101, 0.0007, 0.068]
+
+# 02_1_5
+# Initialize encoder, decoder, and output-head weight matrices for the transformer.
+# Collect all embedding and model weights into one parameter list for training.
+
+# 인코더 셀프 어텐션 가중치
+enc_wq = matrix(n_embd, n_embd); enc_wk = matrix(n_embd, n_embd)
+enc_wv = matrix(n_embd, n_embd); enc_wo = matrix(n_embd, n_embd)
+# 인코더 MLP 가중치
+enc_fc1 = matrix(4*n_embd, n_embd); enc_fc2 = matrix(n_embd, 4*n_embd)
+# 디코더 셀프 어텐션 가중치
+dec_wq = matrix(n_embd, n_embd); dec_wk = matrix(n_embd, n_embd)
+dec_wv = matrix(n_embd, n_embd); dec_wo = matrix(n_embd, n_embd)
+# 디코더 크로스 어텐션 가중치
+cross_wq = matrix(n_embd, n_embd); cross_wk = matrix(n_embd, n_embd)
+cross_wv = matrix(n_embd, n_embd); cross_wo = matrix(n_embd, n_embd)
+# 디코더 MLP 가중치
+dec_fc1 = matrix(4*n_embd, n_embd); dec_fc2 = matrix(n_embd, 4*n_embd)
+# 출력 헤드 (디코더 출력을 어휘 크기의 확률 분포로 변환)
+lm_head = matrix(vocab_size, n_embd)
+
+# 모든 파라미터를 하나의 리스트로 모은다 (학습 시 일괄 업데이트를 위해)
+all_matrices = [wte, wpe_enc, wpe_dec,
+                enc_wq, enc_wk, enc_wv, enc_wo, enc_fc1, enc_fc2,
+                dec_wq, dec_wk, dec_wv, dec_wo,
+                cross_wq, cross_wk, cross_wv, cross_wo,
+                dec_fc1, dec_fc2, lm_head]
+params = [p for mat in all_matrices for row in mat for p in row]
+
+print(f"전체 파라미터 수: {len(params)}") # 전체 파라미터 수: 9888
