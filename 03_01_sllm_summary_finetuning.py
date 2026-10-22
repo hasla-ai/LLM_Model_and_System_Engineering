@@ -180,3 +180,135 @@ df_train = df.iloc[:-n_eval].reset_index(drop=True)
 df_eval.to_json("eval_split.jsonl", orient="records", lines=True, force_ascii=False)
 
 print(f"train {len(df_train)} / eval {len(df_eval)}")   # 2939 / 326
+
+
+## 03_01_03
+
+import json
+
+def create_structured_chat_data(df):
+    training_data = []
+
+    for idx, row in df.iterrows():
+        # 이벤트 문장들 수집
+        event_sentences = []
+        for i in range(1, 11):
+            event_col = f'event_sentence{i}'
+            if pd.notna(row[event_col]):
+                event_sentences.append(row[event_col])
+
+        # 구조화된 시스템 프롬프트
+        system_prompt = """당신은 뉴스 텍스트를 분석하여 카테고리를 분류하고 주요 핵심 이벤트들을 추출하는 전문 분석 시스템입니다.
+주어진 텍스트를 분석하여 반드시 파이썬의 dictionary 형식으로 결과를 작성하십시오.
+큰 따옴표 사이에 다른 따옴표들을 적으려고 시도하지 마십시오. 이는 dictionary 파싱을 실패하게 하는 원인이 됩니다.
+아래 dictionary에서 각 value는 지시사항에 해당합니다. 지시사항을 그대로 적지 마시고, 해당 지시사항에 따라 적절한 value를 채워넣으십시오.
+
+분석 결과는 다음 형식으로 작성하십시오:
+
+답변:
+{"category": "텍스트의 카테고리를 ['부동산', '산업', '오피니언', '증권'] 중 하나로 분류하여 작성하십시오",
+"event_count": "텍스트 내에서 발견된 핵심 이벤트의 개수를 정수로 작성하십시오(증감, 변화, 변동이 나오는 구절을 중점적으로 보세요.)",
+"events": ["텍스트에서 추출한 각 핵심 이벤트를 요약하는 문장들을 파이썬 문자열 리스트 형태로 작성하십시오. 원문의 핵심 내용을 그대로 유지하되 한 문장으로 간결하게 작성하십시오"]}"""
+
+        # 사용자 프롬프트
+        user_prompt = f"""다음 뉴스 텍스트를 분석해주세요:
+
+{row['text']}"""
+
+        # 어시스턴트 응답 (Dict 형식)
+        events_list = [event.strip() for event in event_sentences]
+
+        assistant_response = f"""{{"category": "{row['text_category']}","event_count": {row['event_quantity']},"events": {json.dumps(events_list, ensure_ascii=False)}}}"""
+
+        sample = {
+                      "doc_id": row['doc_id'],
+                      "system_prompt": system_prompt,
+                      "user_prompt": user_prompt,
+                      "assistant": assistant_response
+                  }
+
+        training_data.append(sample)
+
+    return training_data
+
+# 데이터 함수 실행
+training_data = create_structured_chat_data(df_train)
+
+# 첫 번째 샘플 확인
+print(" ===== 시스템 프롬프트  =====")
+print(training_data[0]['system_prompt'])
+print("\n===== 사용자 프롬프트  =====")
+print(training_data[0]['user_prompt'][:200] + "...")
+print("\n===== 어시스턴트 응답 =====")
+print(training_data[0]['assistant'])
+
+#  ===== 시스템 프롬프트  =====
+# 당신은 뉴스 텍스트를 분석하여 카테고리를 분류하고 주요 핵심 이벤트들을 추출하는 전문 분석 시스템입니다.
+# 주어진 텍스트를 분석하여 반드시 파이썬의 dictionary 형식으로 결과를 작성하십시오.
+# 큰 따옴표 사이에 다른 따옴표들을 적으려고 시도하지 마십시오. 이는 dictionary 파싱을 실패하게 하는 원인이 됩니다.
+# 아래 dictionary에서 각 value는 지시사항에 해당합니다. 지시사항을 그대로 적지 마시고, 해당 지시사항에 따라 적절한 value를 채워넣으십시오.
+
+# 분석 결과는 다음 형식으로 작성하십시오:
+
+# 답변:
+# {"category": "텍스트의 카테고리를 ['부동산', '산업', '오피니언', '증권'] 중 하나로 분류하여 작성하십시오",
+# "event_count": "텍스트 내에서 발견된 핵심 이벤트의 개수를 정수로 작성하십시오(증감, 변화, 변동이 나오는 구절을 중점적으로 보세요.)",
+# "events": ["텍스트에서 추출한 각 핵심 이벤트를 요약하는 문장들을 파이썬 문자열 리스트 형태로 작성하십시오. 원문의 핵심 내용을 그대로 유지하되 한 문장으로 간결하게 작성하십시오"]}
+
+# ===== 사용자 프롬프트  =====
+# 다음 뉴스 텍스트를 분석해주세요:
+
+# 대통령 선거 후 수도권을 중심으로 한 부동산시장이 조금씩 바닥을 다지며 다시 상승을 준비하는 모습이 곳곳에서 포착되고 있다. 윤석열 대통령 당선인의 재건축·재개발 공약으로 서울에서 재건축 단지가 많은 지역 아파트값은 하락폭을 줄이고 있고, 일선 부동산 공인중개소에서는 매물을 거둬들이는 이가 점차 늘고 있는 것으로 나타났다...
+
+# ===== 어시스턴트 응답 =====
+# {"category": "부동산","event_count": 2,"events": ["17일 한국부동산원에 따르면 서울의 3월 둘째 주(14일 기준) 아파트 매매가격지수는 전주 대비 0.02% 하락했다.", "경기 지역 역시 재건축 대상 아파트가 많은 고양(-0.02%→0%)이 보합으로 돌아섰고, 성남 분당은 전주와 같은 하락폭(-0.01%)을 기록했다."]}
+
+def format_data(sample):
+    return {
+        "messages": [
+            {
+                "role": "system",
+                "content": sample["system_prompt"],
+            },
+            {
+                "role": "user",
+                "content": sample["user_prompt"],
+            },
+            {
+                "role": "assistant",
+                "content": str(sample["assistant"])
+            },
+        ],
+    }
+
+# 전체 데이터에 format_data 적용
+formatted_data = [format_data(sample) for sample in training_data]
+
+# 확인
+print("\n ===== 포맷된 데이터 샘플  =====")
+# formatted_data[0]
+print(formatted_data[0])
+
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
+# model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B")
+model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-1.7B", torch_dtype=torch.bfloat16)
+
+print("모델과 토크나이저 로드 완료")
+print(f"Tokenizer vocab size: {tokenizer.vocab_size}")
+print(f"Model parameters: {model.num_parameters():,}")
+
+# 전체 데이터에 템플릿 적용
+texts = []
+for sample in formatted_data:
+    text = tokenizer.apply_chat_template(
+        sample["messages"],
+        tokenize=False,
+        add_generation_prompt= False,
+        chat_template_kwargs= {"enable_thinking": False}
+
+    )
+    texts.append(text)
+
+print(f"템플릿 적용 완료: {len(texts)}개 샘플")
+print(f"첫 번째 샘플 길이: {len(texts[0])}")
+print(texts[0])
