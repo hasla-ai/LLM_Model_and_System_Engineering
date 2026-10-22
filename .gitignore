@@ -1,2 +1,9 @@
 .venv/
 __pycache__/
+
+# 학습·평가 결과물
+eval_split.jsonl
+qwen3-lora-ft/
+qwen3-lora-ft-final/
+qwen3-lora-test/
+qwen3-merged/

@@ -25,6 +25,22 @@ print("GPU:", torch.cuda.get_device_name(device), "| Compute capability:", torch
 # 학습 설정(SFTConfig)이 bf16=True를 쓰므로 GPU가 bf16을 지원해야 합니다.
 assert torch.cuda.is_bf16_supported(), "이 GPU는 bf16을 지원하지 않습니다."
 free, total = torch.cuda.mem_get_info(device)
+
+torch.cuda.set_per_process_memory_fraction(0.85, device)
+# 약 6.8GB 넘으면 RAM을 빌려 쓰지 않고 OOM 오류로 멈춤
+
+# 어텐션 커널: Linux(WSL)는 FlashAttention, FlashAttention이 없는 Windows는 GQA 경로를 끄고 memory-efficient 커널
+# 학습 중 L×L 행렬을 만드는 math 방식으로 넘어가지 않도록 커널을 고정해, 못 쓰면 바로 오류가 나게 한다.
+from torch.nn.attention import sdpa_kernel, SDPBackend
+
+flash_ok = torch.backends.cuda.is_flash_attention_available()
+if not flash_ok:
+    import transformers.integrations.sdpa_attention as sdpa_attention
+    sdpa_attention.use_gqa_in_sdpa = lambda attention_mask, key: False
+attn_backend = SDPBackend.FLASH_ATTENTION if flash_ok else SDPBackend.EFFICIENT_ATTENTION
+print("FlashAttention 빌드:", flash_ok, "| 학습 어텐션 커널:", attn_backend.name)
+
+
 print(f"VRAM 여유/전체: {free / 1024**3:.1f} / {total / 1024**3:.1f} GB")
 print("='-'" * 30)
 
@@ -561,3 +577,359 @@ print(f"학습 가능 비율: {trainable_params/total_params*100:.4f}%")
 # v_proj(2048→1024): 16×2048 + 1024×16 = 49,152
 # (65,536 + 49,152) × 28층 = 3,211,264개로 출력과 정확히 일치합니다. 전체의 **0.19%**입니다.
 # 전체 파라미터 1,723,786,240개는 원래 1,720,574,976개에 LoRA 3,211,264개를 더한 값입니다.
+
+## 03_01_07
+
+# SFT 학습 설정
+# 배치 크기 1, 누적 4 (유효 배치 4는 그대로)
+# 정답 위치에서만 logits 계산 (핵심 변경)
+
+sft_cfg = SFTConfig(
+    output_dir="./qwen3-lora-ft",           # 모델 저장 디렉토리
+    num_train_epochs=1,                     # 학습 에포크 수
+
+    # 배치 크기 1, 누적 4 (유효 배치 4는 그대로)
+
+    per_device_train_batch_size=1,          # 배치 크기 < 수정 2 -> 1 >
+    gradient_accumulation_steps=4,          # 그래디언트 누적 스텝 <수정 2 -> 4 >
+    learning_rate=2e-4,                     # 학습률
+    optim="adamw_torch",                    # 옵티마이저
+    bf16=True,                              # 16비트 부동소수점 사용
+    gradient_checkpointing=True,            # 메모리 절약을 위한 체크포인팅
+    logging_steps=100,                      # 로그 출력 간격
+    save_steps=100,                         # 모델 저장 간격
+    save_total_limit=3,                     # 저장할 체크포인트 최대 개수
+    max_grad_norm=0.3,                      # 그래디언트 클리핑
+    warmup_ratio=0.03,                      # 웜업 비율
+    lr_scheduler_type="linear",             # 학습률 스케줄러
+    report_to="none",                       # 실험 추적 도구 (사용 안 함)
+    remove_unused_columns=False,            # 사용하지 않는 컬럼 제거 안 함
+    weight_decay=0.01,                      # 가중치 감쇠
+    max_length=8192,                        # 최대 시퀀스 길이
+    packing=False,                          # 시퀀스 패킹 사용 안 함
+)
+
+# SFTTrainer 초기화
+
+import torch.nn.functional as F
+
+class AnswerOnlyLossTrainer(SFTTrainer):
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        base = model.get_base_model()                 # PeftModel 안의 Qwen3ForCausalLM (LoRA 층 포함)
+
+        # ① 28층만 통과시켜 마지막 은닉 상태를 얻음 (lm_head는 아직 적용 안 함)
+        hidden = base.model(input_ids=inputs["input_ids"],
+                            attention_mask=inputs["attention_mask"],
+                            use_cache=False).last_hidden_state      # (1, 길이, 2048)
+
+        # i번째 위치가 i+1번째 토큰을 맞히므로 정답을 한 칸 당김
+        shift_labels = inputs["labels"][:, 1:]
+        mask = shift_labels != -100                                 # 정답 위치만 True
+
+        # ② 정답 위치의 은닉 상태만 골라 lm_head 적용 → (정답 토큰 수, 151936)
+        logits = base.lm_head(hidden[:, :-1][mask]).float()
+
+        # ③ 누적 4스텝의 정답 토큰 수로 나눠 평균 (책 방식과 같은 기준)
+        loss = F.cross_entropy(logits, shift_labels[mask], reduction="sum")
+        loss = loss / (num_items_in_batch if num_items_in_batch is not None else mask.sum())
+
+        # (선택) 정답 토큰 정확도 로그: 책 방식의 mean_token_accuracy와 같은 지표
+        self._metrics["train"]["mean_token_accuracy"].append(
+            (logits.argmax(-1) == shift_labels[mask]).float().mean().item())
+        return (loss, None) if return_outputs else loss
+
+
+# 본 학습 전에 가장 긴 샘플로 메모리·속도 시험 (확인 후 False로 바꿔 본 학습)
+# 가장 긴 샘플 8개로 2스텝(배치 1 × 누적 4 × 2)만 학습해 최대 메모리와 속도를 잽니다.
+# 시험이 끝나면 프로그램을 종료하므로 본 학습에는 영향이 없습니다.
+# TEST_RUN = True로 한 번 실행해 결과를 확인한 뒤, False로 바꿔 본 학습을 실행하면 됩니다. 
+
+print("어텐션 방식:", model.config._attn_implementation)       # sdpa가 정상
+print("가장 긴 8개:", sorted(lengths, reverse=True)[:8])
+for t in (3072, 4096):
+    print(f"{t}토큰 초과: {sum(l > t for l in lengths)}개 / {len(lengths)}개")
+
+# 어텐션 방식: sdpa
+# 가장 긴 8개: [6885, 4271, 4261, 4097, 4041, 3998, 3961, 3835]
+# 3072토큰 초과: 25개 / 2939개
+# 4096토큰 초과: 4개 / 2939개
+
+TEST_RUN = False
+
+if TEST_RUN:
+    import time
+    # 03_01_04의 lengths(샘플별 토큰 수)로 가장 긴 8개 선택
+    longest = sorted(range(len(tokenized_dataset)), key=lambda i: lengths[i], reverse=True)[:8]
+    test_cfg = SFTConfig(
+        output_dir="./qwen3-lora-test",
+        max_steps=2,                        # 2스텝 × 누적 4 = 샘플 8개
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=4,
+        learning_rate=2e-4,
+        bf16=True,
+        gradient_checkpointing=True,
+        logging_steps=1,
+        save_strategy="no",                 # 체크포인트 저장 안 함
+        report_to="none",
+        remove_unused_columns=False,
+        max_length=8192,
+        packing=False,
+    )
+    test_trainer = AnswerOnlyLossTrainer(model=model, args=test_cfg,
+                                         train_dataset=tokenized_dataset.select(longest),
+                                         processing_class=tokenizer)
+    model.enable_input_require_grads()
+    torch.cuda.reset_peak_memory_stats(device)
+    start = time.perf_counter()
+    # test_trainer.train()
+    with sdpa_kernel(attn_backend):
+        test_trainer.train()
+    torch.cuda.synchronize(device)
+    sec_per_step = (time.perf_counter() - start) / 2
+    print(f"가장 긴 샘플 기준 최대 GPU 메모리: {torch.cuda.max_memory_allocated(device) / 1024**3:.2f} GB")
+    print(f"스텝당 {sec_per_step:.1f}초 → 전체 예상 약 {sec_per_step * 0.2 * 735 / 60:.0f}분")
+    raise SystemExit("시험 끝: TEST_RUN = False로 바꾸고 본 학습을 실행하세요.")
+
+# 가장 긴 샘플 기준 최대 GPU 메모리: 4.84 GB
+# 스텝당 8.9초 → 전체 예상 약 22분
+# 시험 끝: TEST_RUN = False로 바꾸고 본 학습을 실행하세요.
+
+# trainer = SFTTrainer(
+trainer = AnswerOnlyLossTrainer(
+    model=model,
+    args=sft_cfg,
+    train_dataset=tokenized_dataset,
+    eval_dataset=None,
+    processing_class=tokenizer,
+)
+
+
+
+
+if not os.path.exists("./qwen3-lora-ft-final"):    # 학습 결과가 없을 때만 학습
+
+    # 모델의 입력 그래디언트 활성화 (LoRA 학습에 필요)
+    model.enable_input_require_grads()
+
+    # 데이터셋 셔플 및 학습 시작
+    trainer.train_dataset = trainer.train_dataset.shuffle(seed=42)
+    # trainer.train()
+    with sdpa_kernel(attn_backend):
+        trainer.train()
+
+    # 학습 완료 후 모델 저장
+    trainer.save_model("./qwen3-lora-ft-final")
+    print("훈련 완료 모델 저장됨.")
+
+# {'loss': 0.1687, 'grad_norm': 0.416015625, 'learning_rate': 0.00017865168539325842, 'mean_token_accuracy': 0.9696124362945556, 'epoch': 0.14}
+# {'loss': 0.0671, 'grad_norm': 0.2353515625, 'learning_rate': 0.000150561797752809, 'mean_token_accuracy': 0.9820817258954048, 'epoch': 0.27}
+# {'loss': 0.0658, 'grad_norm': 0.22265625, 'learning_rate': 0.00012247191011235955, 'mean_token_accuracy': 0.9812659087777138, 'epoch': 0.41}
+# {'loss': 0.0612, 'grad_norm': 0.234375, 'learning_rate': 9.438202247191012e-05, 'mean_token_accuracy': 0.9826123650372028, 'epoch': 0.54}
+# {'loss': 0.059, 'grad_norm': 0.197265625, 'learning_rate': 6.629213483146067e-05, 'mean_token_accuracy': 0.9827923990786076, 'epoch': 0.68}
+# {'loss': 0.0585, 'grad_norm': 0.359375, 'learning_rate': 3.8202247191011236e-05, 'mean_token_accuracy': 0.982940639257431, 'epoch': 0.82}
+# {'loss': 0.0596, 'grad_norm': 0.1689453125, 'learning_rate': 1.0112359550561798e-05, 'mean_token_accuracy': 0.9823568019270897, 'epoch': 0.95}
+# {'train_runtime': 1771.6498, 'train_samples_per_second': 1.659, 'train_steps_per_second': 0.415, 'train_loss': 0.07604663891046226, 'mean_token_accuracy': 0.9839962862378402, 'epoch': 1.0}
+# 훈련 완료 모델 저장됨.
+
+
+
+## 03_01_08  학습 결과를 확인하기 위해 모델을 다시 불러오는 준비 작업
+
+import gc
+
+# 학습에 쓴 트레이너·모델을 지워 GPU 메모리를 비운다 (학습 직후 같은 실행에서 이어질 때 필요)
+for name in ("trainer", "model"):
+    globals().pop(name, None)
+gc.collect()
+torch.cuda.empty_cache()
+
+
+# 토크나이저와 모델 로드
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
+
+# 베이스 모델 로드
+# base = AutoModelForCausalLM.from_pretrained(
+#     "Qwen/Qwen3-1.7B",
+#     torch_dtype="auto",
+#     device_map="auto"
+# ).eval()
+
+base = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen3-1.7B",
+    torch_dtype="auto",
+    device_map=device
+).eval()
+
+# LoRA 파인튜닝된 모델 로드: 같은 베이스에 어댑터만 붙인다 (두 번째 복사본을 만들지 않음)
+# lora = AutoModelForCausalLM.from_pretrained(
+#     "Qwen/Qwen3-1.7B",
+#     torch_dtype="auto",
+#     device_map="auto"
+# )
+# lora = PeftModel.from_pretrained(
+#     lora,
+#     "./qwen3-lora-ft-final",
+#     device_map="auto",
+#     torch_dtype="auto"
+# ).eval()
+lora = PeftModel.from_pretrained(base, "./qwen3-lora-ft-final").eval()
+
+
+## 03_01_09
+
+# 학습 전후 비교 테스트
+# 학습에 쓰지 않은 새 뉴스 기사 3개(부동산, 산업, 증권)를 베이스 모델과 LoRA 모델에 똑같이 넣고, 출력 JSON을 나란히 비교
+
+
+# 시스템 프롬프트 
+system_prompt = """당신은 뉴스 텍스트를 분석하여 카테고리를 분류하고 주요 핵심 이벤트들을 추출하는 전문 분석 시스템입니다.
+주어진 텍스트를 분석하여 반드시 파이썬의 dictionary 형식으로 결과를 작성하십시오.
+큰 따옴표 사이에 다른 따옴표들을 적으려고 시도하지 마십시오. 이는 dictionary 파싱을 실패하게 하는 원인이 됩니다.
+아래 dictionary에서 각 value는 지시사항에 해당합니다. 지시사항을 그대로 적지 마시고, 해당 지시사항에 따라 적절한 value를 채워넣으십시오.
+
+분석 결과는 다음 형식으로 작성하십시오:
+
+답변:
+{"category": "텍스트의 카테고리를 ['부동산', '산업', '오피니언', '증권'] 중 하나로 분류하여 작성하십시오",
+"event_count": "텍스트 내에서 발견된 핵심 이벤트의 개수를 정수로 작성하십시오(증감, 변화, 변동이 나오는 구절을 중점적으로 보세요.)",
+"events": ["텍스트에서 추출한 각 핵심 이벤트를 요약하는 문장들을 파이썬 문자열 리스트 형태로 작성하십시오. 원문의 핵심 내용을 그대로 유지하되 한 문장으로 간결하게 작성하십시오"]}"""
+
+# 테스트 데이터 3개 
+test_texts = [
+    # 1. 부동산 카테고리
+    """ 최대 수혜지역이라고요? 분위기 좀 달라지긴 했지만, 그게 꼭 6·27 대출 규제 때문만은 아니죠."
+
+지난 19일 서울 도봉구 창동역 인근 한 공인중개사는 최근 시장 분위기를 묻는 질문에 이같이 말했다. 도봉구는 창동 차량기지 복합개발, GTX-C 등 대형 교통 호재에 힘입어 올해 들어 아파트값이 상승세로 전환됐고, 일부 단지에서는 실거래가 회복 조짐도 나타나고 있다. 반면 6·27대책 발표 직후 상승세 강했던 금관구(금천·관악·구로)는 매수·매도인 모두 지켜보기에 들어간 모습이다.
+
+■도봉구 상승세…실거래가 회복 조짐
+
+6·27 대출 규제 시행 3주차에 접어들면서 서울 외곽 지역을 중심으로 시장의 온도차가 뚜렷해지고 있다. 한국부동산원 주간 아파트가격 동향에 따르면 7월 2주(15일 기준) 서울 아파트값은 0.19% 올라 전주(0.29%)보다 오름폭이 둔화됐다. 다만 도봉구(0.05%→0.06%)와 중구(0.16%→0.18%)는 상승폭이 소폭 확대됐다. 도봉구의 한 중개업소 관계자는 "급매가 거의 소진된 상태에서 전고점에 근접한 거래도 하나둘 나타나고 있다"며 "전용 84㎡, 165㎡ 등 다양한 평형에 실수요자와 일부 투자자의 문의가 이어지고 있다"고 전했다. 이어 "6·27 대책 이후 도봉구처럼 상대적으로 대출 여건이 유지되는 중저가 지역에 관심이 모이고 있는 건 사실이지만, 지금 시장을 움직이는 건 결국 개발 기대감에 기반한 유동성 있는 수요자들"이라고 설명했다.
+
+서울부동산정보광장에 따르면 도봉구 아파트 거래량은 5월 155건, 6월 289건으로 늘었지만, 7월 들어서는 20일 기준 51건에 머물고 있다. 규제 여파로 거래량은 다소 숨고르기에 들어간 양상이지만 가격 상승세는 계속될 것으로 전망됐다.
+
+도봉구의 또 다른 중개업소 대표는 "이미 작년에 바닥을 찍었다는 인식이 확산되면서 실수요자 문의가 늘고 있고, 호가도 빠르게 회복되고 있다"며 "GTX-C, 창동 차량기지 개발 등 향후 호재가 여전한 만큼, 지금은 회복의 시작일 뿐이라는 얘기도 나온다"고 했다.
+
+■금관구 숨고르기…거래량 감소 뚜렷
+
+반면 6·27 대책 직후 풍선효과 기대감이 부각됐던 '금관구'는 오름세가 한풀 꺾인 분위기다. 같은 기간 금천구는 0.09%→0.07%, 관악구는 0.19%→0.15%, 구로구는 0.18%→0.12%로 상승폭이 일제히 축소됐다.
+
+금천구 시흥동의 한 중개업소 관계자는 "호가는 잠깐 반짝했지만 지금은 문의가 다시 줄어든 상황"이라며 "갭투자자든 실수요자든 모두 관망 중"이라고 말했다. 관악구의 한 공인중개사도 "전세보증금이 낮은 구축 소형 위주로 간헐적인 갭투자 수요는 있었지만, 지금은 전세금도 안 오르고 매수도 끊긴 상태"라고 분위기를 전했다.
+
+서울부동산정보광장에 따르면 금천구 아파트 거래량은 5월 74건에서 6월 135건으로 증가한 뒤, 7월(20일 기준)에는 25건에 그쳤다. 관악구는 같은 기간 222건→294건→54건, 구로구는 678건→462건→84건으로 줄며 거래 감소세가 뚜렷하다.
+
+개봉동의 중개업소 관계자는 "급매라고는 해도 1000만~2000만원 낮춘 수준인데, 그런 물건도 상반기에 이미 빠졌다"며 "매수자는 관망세, 매도자는 버티기에 들어간 상황"이라고 전했다. 결론적으로 매물 자체가 줄어들면서 거래량도 감소한 위축된 시장 흐름을 보이고 있어, 풍선효과가 나타난다고 보기는 어렵다는 평가다.
+
+부동산업계 한 전문가는 "서울 외곽 지역은 규제 변화에 민감하게 반응하는 편이지만, 신축 비중이나 입지 여건, 실수요자의 선호도에 따라 시장 흐름은 엇갈릴 수밖에 없다"며 "현재는 거래 절벽에 가까운 상태로 '풍선효과' 역시 일부 지역에 국한된 단기 흐름에 그칠 가능성이 높다"고 진단했다.",
+""",    
+    # 2. 산업 카테고리
+    """
+    한일시멘트가 자회사 한일현대시멘트 흡수 합병을 통해 경영효율화에 나서면서 시멘트업계에 구조·사업개편 가능성이 제기된다. 국내 시멘트 산업이 '저성장 고비용'의 구조적 위험에 빠진데 따른 영향이라는 분석이다. 다만 한일시멘트를 제외한 주요 기업들은 우선 신중모드로 접근할 전망이다.
+
+20일 관련 업계에 따르면 한일시멘트는 최근 이사회를 열고 77.78% 지분을 보유한 한일현대시멘트를 오는 11월 1일부로 흡수 합병하기로 의결했다. 양사는 2017년부터 단계적으로 통합 작업을 진행해왔다. 이번 합병으로 상장사 이중 구조를 해소하고 중복투자·외부비용 절감을 통한 경영 효율화에 나선다는 방침이다. 한일시멘트 관계자는 "경기가 부침이 있는 만큼 설비 등 인프라 활용해 탄력적 대응이 가능할 것"이라고 말했다.
+
+이미 시멘트 업계의 경영상황은 악화일로다. 국토교통부에 따르면 지난 5월 건설착공면적은 전월 대비 26.9% 감소한 620만㎡ 수준에 그쳤다. 착공면적은 통상 건설경기의 선행지표로 여겨진다. 시멘트 출하량도 급감했다. 올해 1·4분기 시멘트 내수는 전년 동기 대비 21.8% 줄어든 812만t으로, 최근 5년 내 최저치를 기록했다. 2023년 1·4분기 1201만t 대비 2년 새 32.4%가 줄어든 셈이다.
+
+그럼에도 업계 전반의 대응은 신중한 모습이다. 한일을 제외한 주요 업체들은 합병 혹은 조직개편 계획 여부 등은 없다는 입장이다. 쌍용C&E 관계자는 "경기가 좋지 않지만 수출 덕분에 그나마 나은 상황으로 당분간 특별한 계획 없다"고 말했다. 성신양회, 한라시멘트 관계자 역시 "거래처 및 비용 절감에 집중하고 있을 뿐, 지배구조 개편 등은 고려하고 있지 않다"고 했다.
+
+업계는 현재 위기를 수요 부진과 고정비 부담의 이중고로 보고 있다. 시멘트 산업은 설비 비중이 높아 수요가 줄어도 일정 수준의 가동과 인력 유지를 지속해야 하기 때문이다. 게다가 최근 몇 년간 산업용 전기요금 인상, 탄소배출권 비용 증가, 폐기물 처리단가 상승 등 외부 비용도 커졌다.
+
+이 가운데 업계는 환경·사회·지배구조(ESG) 전환에도 동시에 대응 중이다. 시멘트 제조 시 온실가스 배출량이 많다는 점에서, 탄소중립 압력이 거세져 온 탓이다. 이에 오는 2030년까지 2018년 대비 12%, 2050년까지 53%의 온실가스 감축을 목표로 설정하고 있다. 이를 위해 석회석 대신 비탄산염 원료를 활용한 저탄소 클링커 기술, 폐합성수지·바이오매스 등 순환자원 연료 전환 기술 개발 등에 집중하고 있다.
+
+한일시멘트의 이번 결정은 불황기의 생존 해법으로 지배구조 단순화 및 비용 최적화의 가능성을 제기했다는 분석이 나온다.
+
+업계 관계자는 "내수 의존도가 큰 기업일수록 버틸 수 있는 시간이 길지 않다"며 "누가 먼저 구조를 바꾸고, 얼마나 오래버티느냐가 관건"이라고 말했다.
+    """,
+    
+    # 3. 증권 카테고리
+    """ (서울=연합뉴스) 임화섭 기자 = 인공지능(AI) 분야 경쟁으로 '매그니피센트 세븐'(미국의 7대 테크 대기업·The Magnificent Seven) 사이에서도 주가 차별화가 심화되고 있다고 미국 일간 월스트리트저널(WSJ)이 20일(현지시간) 분석했다.
+
+테크업계를 주름잡는 대기업들이며 각종 주가지수에서도 큰 비중을 차지하는 아마존닷컴(이하 아마존), 알파벳, 애플, 메타플랫폼스(이하 메타), 마이크로소프트(이하 MS), 엔비디아, 테슬라 등 7개 기업의 주가 흐름이 AI 분야 성과에 따라 크게 갈리는 경향이 최근 뚜렷해졌다는 것이다.
+
+대표적인 주가지수인 S&P 500에서 이들 7개 업체가 차지하는 비중은 35%에 이른다.
+
+최근 모건스탠리 보고서에 따르면 이 업체들의 2분기 순이익은 전년 동기 대비 14% 증가할 것으로 전망되며, 이는 나머지 493개 S&P 500 기업의 순이익이 전년 동기 대비 3% 감소할 것으로 예상되는 전반적 증시 분위기와 비교하면 훨씬 좋다.
+
+이들 중 알파벳을 제외한 6개 업체들은 최근 주가가 향후 1년간 예상 순이익의 25배를 넘었으며, 이는 최근 S&P 500 기업의 평균 주가수익비율(PER) 22.35보다 높다.
+
+올해 들어 엔비디아, 메타, MS의 주가는 약 20% 이상 올랐으나, 이와 대조적으로 애플은 16% 하락했고 알파벳도 2% 내렸고 테슬라는 18%가 빠졌다.
+
+AI 스타트업 '앤스로픽'에 투자한 아마존은 관세 등의 영향으로 전자상거래 부문 사업에 타격이 상당히 큰 가운데서도 3% 올랐다.
+
+알파벳과 테슬라는 오는 23일에, 메타, MS, 애플은 그 다음 주에 분기 실적을 발표할 예정이다.
+
+해리스 파이낸셜 그룹의 매니징 파트너인 제이미 콕스는 WSJ에 "(테크 대기업들 사이에서 실적에 따라 주가 흐름이 차별화되는 것은) 불가피한 일이었다. 다른 일들을 하고 있기 때문에 영원히 서로 똑같은 (주가) 흐름이 계속되는 것은 불가능하다"며 "이제 승자와 패자의 계층분화가 왔다"고 평가했다.
+
+2023년에 이 7개 업체를 묶어서 '매그니피센트 세븐'이라는 표현을 쓰기 시작한 뱅크오브아메리카 글로벌 리서치의 투자전략담당 책임자 마이클 하트넛은 이들 업체를 묶어서 본 중요한 이유 중 하나는 이들이 AI 분야의 선봉에 있기 때문이라고 말한 바 있다.
+
+그러나 투자회사 스피어의 창립자 겸 투자책임자인 이바나 델레브스카는 "지금은 펀더멘털에서 (7개 업체들 사이에) 상당히 큰 차이가 보이고 있다"고 말했다.
+    """
+]
+def generate_output(model, text, system_prompt):
+    # messages 형식으로 프롬프트 구성 (system + user)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"다음 뉴스 텍스트를 분석해주세요:\n\n{text}"}
+    ]
+    
+    # apply_chat_template 사용 (thinking 끄기: enable_thinking=False)
+    prompt_text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False  # thinking 모드 OFF (여기서 변경!)
+    )
+    
+    # 입력 토큰화
+    inputs = tokenizer([prompt_text], return_tensors="pt").to(model.device)
+    
+    # generate (deterministic으로 설정)
+    with torch.no_grad():
+        generated_ids = model.generate(
+            **inputs,
+            # max_length=8192,  # 최대 길이
+            max_new_tokens=1024,   # 새로 생성할 최대 토큰 수
+            do_sample=False   # 샘플링 off
+        )
+    
+    # 출력 디코딩 (thinking이 없을 테니 전체 출력)
+    output_ids = generated_ids[0][len(inputs.input_ids[0]):]  # 생성된 부분만
+    decoded_output = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+    
+    # 만약 thinking 태그가 남아 있으면 파싱 (안전장치, False로 하면 불필요)
+    try:
+        # </think> 토큰 ID (Qwen 공식: 151668, 모델에 따라 확인 필요)
+        think_end_token = 151668  # Qwen의 </think> 토큰 ID
+        index = len(output_ids.tolist()) - output_ids.tolist()[::-1].index(think_end_token)
+    except ValueError:
+        index = 0  # thinking 없으면 0
+    thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip()
+    content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip()
+    
+    # thinking이 있으면 출력, 없으면 content만
+    if thinking_content:
+        print("주의: thinking content가 남아 있음:", thinking_content)
+    
+    return content  # 최종 content 반환 (dictionary 예상)
+
+
+# 5. 3개 데이터로 베이스 모델 generate 실행
+for i, text in enumerate(test_texts, 1):
+    # print(f"\n===== 테스트 데이터 {i} (카테고리 힌트: 부동산/산업/증권) =====\n{text}\n")
+    
+    # generate 호출 (모델 로드 후 바로 여기서 generate)
+
+    # base_output = generate_output(base, text, system_prompt)
+    with lora.disable_adapter():                       # LoRA를 끈 상태 = 베이스 모델
+        base_output = generate_output(lora, text, system_prompt)
+    print("----- 베이스 모델 출력 -----\n", base_output)
+
+    
+    # generate 호출 (모델 로드 후 바로 여기서 generate)
+    # base_output = generate_output(lora, text, system_prompt)
+
+    lora_output = generate_output(lora, text, system_prompt)
+
+    print("----- 로라 모델 출력 -----\n", lora_output)
+    
+    print(f"\n===== {i}번째 비교 테스트 끝 =====\n")
+
