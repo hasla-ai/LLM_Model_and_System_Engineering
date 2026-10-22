@@ -382,3 +382,71 @@ x_small = [0.01, 0.02, 0.03]
 x_small_after = rmsnorm_plain(x_small)
 print(f"정규화 전: {x_small}")
 print(f"정규화 후: {[round(v, 4) for v in x_small_after]}")
+
+# 정규화 전: [150.0, 280.0, 320.0]
+# 정규화 후: [0.5762, 1.0756, 1.2293]
+# 정규화 전: [0.01, 0.02, 0.03]
+# 정규화 후: [0.458, 0.9161, 1.3741]
+
+# 02_1_13
+# A Transformer block combines attention for contextual understanding with an MLP for feature transformation.
+# Residual connections preserve the input signal while normalization helps keep each sublayer stable.
+
+# 트랜스포머 블록 동작 확인
+# "hello"의 첫 문자 'h'에 대해 블록을 통과시킨다
+x_input = hello_vecs[0]  # 'h'의 임베딩+위치 벡터 (16차원)
+
+# --- 어텐션 블록 ---
+x_residual = x_input                    # 잔차 연결용 보존
+x = rmsnorm(x_input)                    # 정규화
+attn_out = multi_head_attention(x, hello_vecs, hello_vecs, enc_wq, enc_wk, enc_wv, enc_wo)
+x = [a + b for a, b in zip(attn_out, x_residual)]   # 잔차 연결
+
+# --- MLP 블록 ---
+x_residual = x                          # 잔차 연결용 보존
+x = rmsnorm(x)                          # 정규화
+h = linear(x, enc_fc1)                  # 16차원 → 64차원
+h = [hi.relu() for hi in h]             # ReLU
+h = linear(h, enc_fc2)                  # 64차원 → 16차원
+x_output = [a + b for a, b in zip(h, x_residual)]   # 잔차 연결
+
+print(f"블록 입력 (처음 4개): {[round(v.data, 4) for v in x_input[:4]]}")
+print(f"블록 출력 (처음 4개): {[round(v.data, 4) for v in x_output[:4]]}")
+print(f"입력 차원: {len(x_input)}, 출력 차원: {len(x_output)}")
+
+# 블록 입력 (처음 4개): [0.1769, -0.101, 0.0007, 0.068]
+# 블록 출력 (처음 4개): [0.0878, 0.1029, -0.0786, 0.0801]
+# 입력 차원: 16, 출력 차원: 16
+
+# 02_1_14
+
+def encode(src_tokens):
+    """인코더: 소스 토큰 시퀀스를 받아 문맥이 반영된 벡터 시퀀스를 반환한다.
+    src_tokens: 토큰 ID 리스트 (예: [9, 1, 11, 14, 21, 6, 1, 24, 14, 20])
+    반환: 각 토큰에 대한 16차원 벡터의 리스트
+    """
+    # 1단계: 각 토큰을 임베딩+위치 벡터로 변환
+    xs = []
+    for pos, tok_id in enumerate(src_tokens):
+        tok_emb = wte[tok_id]        # 토큰 임베딩
+        pos_emb = wpe_enc[pos]       # 위치 임베딩
+        x = [t + p for t, p in zip(tok_emb, pos_emb)]
+        xs.append(x)
+
+    # 2단계: 인코더 블록 (셀프 어텐션 + MLP + 잔차 연결)
+    new_xs = []
+    for i, x in enumerate(xs):
+        x = rmsnorm(x)
+        # 셀프 어텐션: 이 토큰의 Q로, 모든 토큰의 K, V를 참조
+        attn_out = multi_head_attention(x, xs, xs, enc_wq, enc_wk, enc_wv, enc_wo)
+        x_res = [a + b for a, b in zip(attn_out, xs[i])]  # 잔차 연결
+
+        # MLP
+        x_norm = rmsnorm(x_res)
+        h = linear(x_norm, enc_fc1)       # 16 → 64
+        h = [hi.relu() for hi in h]       # ReLU (Value 객체의 메서드)
+        h = linear(h, enc_fc2)            # 64 → 16
+        x_out = [a + b for a, b in zip(h, x_res)]  # 잔차 연결
+
+        new_xs.append(x_out)
+    return new_xs
