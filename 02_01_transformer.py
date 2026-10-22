@@ -1,4 +1,6 @@
 # 02_1_1
+# A scalar value that records its inputs and local derivatives as a computation graph.
+# Its backward pass propagates gradients through that graph using the chain rule.
 
 import math
 import random
@@ -62,6 +64,10 @@ class Value:
             for child, local_grad in zip(v._children, v._local_grads):
                 child.grad += local_grad * v.grad
 
+# 02_1_2
+# Create a small set of English-to-Korean sentence pairs for a toy translation task.
+# These examples provide the parallel text data used by the model.
+
 data_pairs = [
     ("i love you", "나는 너를 사랑해"),
     ("thank you", "고마워"),
@@ -84,8 +90,14 @@ data_pairs = [
     ("be quiet", "조용히 해"),
     ("sit down", "앉아"),
 ]
-print(f"데이터셋 크기: {len(data_pairs)}개") # 20개 
-print(f"예시: '{data_pairs[0][0]}' → '{data_pairs[0][1]}'") # 예시: 'i love you' → '나는 너를 사랑해'
+print(f"데이터셋 크기: {len(data_pairs)}개")
+# 20개
+print(f"예시: '{data_pairs[0][0]}' → '{data_pairs[0][1]}'")
+# 예시: 'i love you' → '나는 너를 사랑해'
+
+# 02_1_3
+# Build a character-level vocabulary with PAD, BOS, and EOS special tokens.
+# Add tokenization, detokenization, and sequence lengths for the translation data.
 
 all_chars = sorted(set(''.join([src + tgt for src, tgt in data_pairs])))
 PAD, BOS, EOS = 0, len(all_chars)+1, len(all_chars)+2
@@ -104,5 +116,10 @@ max_enc_len = max(len(src) for src, _ in data_pairs) + 1
 max_dec_len = max(len(tgt) for _, tgt in data_pairs) + 2
 
 print(f"어휘 크기: {vocab_size} (문자 {len(all_chars)}개 + PAD + BOS + EOS)")
+# 어휘 크기: 73 (문자 70개 + PAD + BOS + EOS)
 print(f"토큰화 예시: 'hello' → {tokenize('hello')}")
+# 토큰화 예시: 'hello' → [8, 6, 11, 11, 14]
 print(f"역토큰화:    {tokenize('hello')} → '{detokenize(tokenize('hello'))}'")
+# 역토큰화:    [8, 6, 11, 11, 14] → 'hello'
+
+# 02_1_3
