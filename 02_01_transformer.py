@@ -399,8 +399,10 @@ x_input = hello_vecs[0]  # 'h'의 임베딩+위치 벡터 (16차원)
 # --- 어텐션 블록 ---
 x_residual = x_input                    # 잔차 연결용 보존
 x = rmsnorm(x_input)                    # 정규화
+
+# 멀티헤드 셀프 어텐션으로 주변 토큰의 문맥을 반영함.
 attn_out = multi_head_attention(x, hello_vecs, hello_vecs, enc_wq, enc_wk, enc_wv, enc_wo)
-x = [a + b for a, b in zip(attn_out, x_residual)]   # 잔차 연결
+x = [a + b for a, b in zip(attn_out, x_residual)]   # 잔차 연결: 어텐션 결과에 원래 입력 더함
 
 # --- MLP 블록 ---
 x_residual = x                          # 잔차 연결용 보존
@@ -450,3 +452,23 @@ def encode(src_tokens):
 
         new_xs.append(x_out)
     return new_xs
+
+# 02_1_15
+# An encoder transforms an input token sequence into contextual representations of its tokens.
+# Each output vector keeps the embedding dimension while incorporating information from the sequence.
+
+# 인코더 실행 테스트
+test_src = "hello"
+src_tokens = tokenize(test_src)
+enc_outputs = encode(src_tokens)
+
+print(f"인코더 입력: '{test_src}' → 토큰 {src_tokens}")
+print(f"인코더 출력: {len(enc_outputs)}개 벡터, 각 {len(enc_outputs[0])}차원")
+for i, (ch, vec) in enumerate(zip(test_src, enc_outputs)):
+    print(f"  '{ch}' 인코더 출력 (처음 4개): {[round(v.data, 4) for v in vec[:4]]}")
+
+#   'h' 인코더 출력 (처음 4개): [0.0878, 0.1029, -0.0786, 0.0801]
+#   'e' 인코더 출력 (처음 4개): [0.0652, -0.0891, 0.2288, -0.0413]
+#   'l' 인코더 출력 (처음 4개): [-0.1629, -0.0291, -0.1405, -0.2295]
+#   'l' 인코더 출력 (처음 4개): [-0.1973, 0.0547, -0.1306, -0.0783]
+#   'o' 인코더 출력 (처음 4개): [0.2108, -0.0879, -0.3736, -0.0427]
