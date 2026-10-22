@@ -297,7 +297,18 @@ print("모델과 토크나이저 로드 완료")
 print(f"Tokenizer vocab size: {tokenizer.vocab_size}")
 print(f"Model parameters: {model.num_parameters():,}")
 
+# 모델과 토크나이저 로드 완료
+# Tokenizer vocab size: 151643
+# Model parameters: 1,720,574,976
+# 템플릿 적용 완료: 2939개 샘플
+# 첫 번째 샘플 길이: 2684
+
 # 전체 데이터에 템플릿 적용
+# 학습 데이터 2,939건의 대화(system/user/assistant)를 모델이 실제로 학습할 문자열 하나로 바꾸는 작업입니다.
+
+
+
+
 texts = []
 for sample in formatted_data:
     text = tokenizer.apply_chat_template(
@@ -312,3 +323,241 @@ for sample in formatted_data:
 print(f"템플릿 적용 완료: {len(texts)}개 샘플")
 print(f"첫 번째 샘플 길이: {len(texts[0])}")
 print(texts[0])
+
+# 템플릿 적용 완료: 2939개 샘플
+# 첫 번째 샘플 길이: 2684
+# <|im_start|>system
+
+# 당신은 뉴스 텍스트를 분석하여 카테고리를 분류하고 주요 핵심 이벤트들을 추출하는 전문 분석 시스템입니다.
+# 주어진 텍스트를 분석하여 반드시 파이썬의 dictionary 형식으로 결과를 작성하십시오.
+# 큰 따옴표 사이에 다른 따옴표들을 적으려고 시도하지 마십시오. 이는 dictionary 파싱을 실패하게 하는 원인이 됩니다.
+# 아래 dictionary에서 각 value는 지시사항에 해당합니다. 지시사항을 그대로 적지 마시고, 해당 지시사항에 따라 적절한 value를 채워넣으십시오.
+
+# 분석 결과는 다음 형식으로 작성하십시오:
+
+# 답변:
+# {"category": "텍스트의 카테고리를 ['부동산', '산업', '오피니언', '증권'] 중 하나로 분류하여 작성하십시오",
+# "event_count": "텍스트 내에서 발견된 핵심 이벤트의 개수를 정수로 작성하십시오(증감, 변화, 변동이 나오는 구절을 중점적으로 보세요.)",
+# "events": ["텍스트에서 추출한 각 핵심 이벤트를 요약하는 문장들을 파이썬 문자열 리스트 형태로 작성하십시오. 원문의 핵심 내용을 그대로 유지하되 한 문장으로 간결하게 작성하십시오"]}<|im_end|>
+# <|im_start|>user
+# 다음 뉴스 텍스트를 분석해주세요:
+
+# 대통령 선거 후 수도권을 중심으로 한 부동산시장이 조금씩 바닥을 다지며 다시 상승을 준비하는 모습이 곳곳에서 포착되고 있다. 윤석열 대통령 당선인의 재건축·재개발 공약으로 서울에서 재건축 단지가 많은 지역 아파트값은 하락폭을 줄이고 있고, 일선 부동산 공인중개소에서는 매물을 거둬들이는 이가 점차 늘고 있는 것으로 나타났다. 다만 전문가들은 아직 부동산과 관련해 구체적인 정책들이 나오지 않았기에 매도자들은 좀 더 지켜볼 필요가 있다는 반응이다.     17일 한국부동산원에 따르면 서울의 3월 둘째 주(14일 기준) 아파트 매매가격지수는 전주 대비 0.02% 하락했다. 8주 연속 떨어졌지만 지난주(-0.02%)에 비해 하락폭이 더 커지지는 않았다. 특히 재건축 단지가 많은 노원구(-0.02%→-0.01%)와 양천구(-0.01%→0%)는 하락폭이 감소했거나 보합으로 돌아섰고, 강남구(-0.01%→0%), 송파구(-0.01%→0%), 강동구(-0.03%→-0.02%) 등 강남권도 전주에 비해 회복되는 모습이었다.   경기 지역 역시 재건축 대상 아파트가 많은 고양(-0.02%→0%)이 보합으로 돌아섰고, 성남 분당은 전주와 같은 하락폭(-0.01%)을 기록했다. 부동산원은 이천(0.27%)은 정주 여건이 양호한 창전·안흥·증포동 위주로, 파주(0.08%)는 문산읍·야동동 역세권 위주로, 일산서구(0.03%)는 대화·일산동 구축 위주로 상승했다고 설명했다. 전국(-0.02%)과 수도권(-0.03%) 아파트값 변동률은 전주와 다르지 않았고, 지방은 -0.01%에서 0%로 보합으로 전환됐다.  재건축 아파트 단지가 많은 서울 지역 공인중개사들도 대선 후 변하고 있는 분위기를 전했다. 노원구 상계동 A공인중개사 대표는 "기존에 매물을 내놨던 소유자 중 호가를 높이기 위해 일단 거둬들이는 이들이 나오고 있다"며 "대선 전에 비해 조금씩 분위기가 변하는 것 같다"고 전했다. 강남구 압구정동 B공인중개사 대표는 "재건축과 관련된 문의가 늘고 있는 것은 맞는 것 같다"면서 바쁜 모습을 보이며 전화를 끊기도 했다.   목동 신시가지 7단지 아파트 전용면적 66㎡는 최근까지 호가가 20억원 선에 눌려 있다가 대선 이후 21억원대로 상승하기도 했다.   하지만 아직 실제 매수로 이어지지는 않고 관망하는 모습이 강해 보인다.   서울부동산정보광장에 따르면 17일 현재 서울시 3월 아파트 매매 거래량은 127건으로 작년 같은 기간 거래량(3762건)에 비해 3.3%에 불과하다.   부동산원 역시 "서울은 규제 완화 기대감이 있는 재건축 단지나 한강변 인기 단지의 경우 매물이 소폭 감소하고 호가가 상승했지만 매수세로 이어지지는 않고 있다"고 밝혔다.  부동산 전문가들은 아직 구체적인 규제 완화책이 나오지 않은 만큼 매도자들은 좀 더 관망하는 한편, 매수자들은 조금 서두를 필요가 있다고 말한다.   김제경 투미부동산컨설팅 소장은 "재건축 아파트 매수와 관련한 문의가 최근 쏟아지고 있다"며 "매도자들의 경우 서두를 필요가 없지만 오는 6월 지방선거 전 또 한번 공약이 쏟아질 것을 감안하면 매수자들은 미리 움직이는 것이 좋다"고 조언했다. 고준석 제이에듀투자자문 대표 역시 "시장은 단기간에는 상승으로 돌아설 것으로 보이며 확실한 자금 계획이 있는 매수자들은 매수에 나서는 게 좋아 보인다"고 설명했다.    특히 오는 7월 말 임대차3법이 시행된 지 만 2년이 되면서 제도 시행 후 2년의 전세계약갱신청구권을 사용한 이들이 기간 만료 전 전세시장에 다시 나오면 전세와 매매시장 모두를 자극할 수 있기 때문에 매수자들은 좀 더 먼저 움직일 필요가 있다는 말도 들린다.     [박준형 기자]<|im_end|>
+# <|im_start|>assistant
+# <think>
+
+# </think>
+
+# {"category": "부동산","event_count": 2,"events": ["17일 한국부동산원에 따르면 서울의 3월 둘째 주(14일 기준) 아파트 매매가격지수는 전주 대비 0.02% 하락했다.", "경기 지역 역시 재건축 대상 아파트가 많은 고양(-0.02%→0%)이 보합으로 돌아섰고, 성남 분당은 전주와 같은 하락폭(-0.01%)을 기록했다."]}<|im_end|>
+
+
+## 03_01_04
+##  03에서 만든 학습용 문자열을 모델 입력(토큰 ID)으로 바꾸면서, 정답 부분만 학습하도록 표시하는 단계
+
+
+def simple_tokenize_function(examples):
+    result = tokenizer(
+        examples["text"],
+        truncation=True,
+        max_length=8192,
+        padding=False,
+        return_overflowing_tokens=False,
+    )
+    result["labels"] = []
+
+    for i, text in enumerate(examples["text"]):
+        input_ids = result["input_ids"][i] # 문자열 전체를 토큰 ID로 바꾼 것 (지시문 + 기사 + 정답)
+        labels = [-100] * len(input_ids)          # ① 전체를 학습 제외로 초기화
+
+        # 손실(오차)을 계산할 정답. ①~④ 과정으로 assistant 답변 구간만 남기고 나머지는 -100(학습 제외)으로 채웁니다.
+
+        # 모델이 지시문과 기사를 그대로 외우는 것이 아니라 기사를 보고 답을 만드는 법만 배우게 하려는 것
+
+        # ② 어시스턴트 시작 위치 찾기
+        assistant_tokens = tokenizer.encode("<|im_start|>assistant\n",
+                                            add_special_tokens=False)
+        
+        for j in range(len(input_ids) - len(assistant_tokens) + 1):
+            if input_ids[j:j+len(assistant_tokens)] == assistant_tokens:
+                start_idx = j + len(assistant_tokens)
+
+                # ③ 어시스턴트 종료(<|im_end|>) 위치 찾기
+                im_end_token = tokenizer.encode("<|im_end|>",
+                                               add_special_tokens=False)[0]
+                for k in range(start_idx, len(input_ids)):
+                    if input_ids[k] == im_end_token:
+                        end_idx = k + 1          # 종료 토큰 <|im_end|> 포함
+                        break
+                else:
+                    end_idx = len(input_ids)
+
+                # ④ 응답 구간 + 종료 토큰을 학습 대상으로 지정
+                labels[start_idx:end_idx] = input_ids[start_idx:end_idx]
+                break
+
+        result["labels"].append(labels)
+    return result
+
+dataset = Dataset.from_dict({"text": texts})
+tokenized_dataset = dataset.map(simple_tokenize_function, batched=True)
+print(f"토크나이징 완료: {len(tokenized_dataset)}개 샘플")
+
+# 토크나이징 후 데이터 확인
+print("===== 토크나이징 후 데이터셋 정보 =====")
+print(tokenized_dataset)
+print(f"컬럼: {tokenized_dataset.column_names}")
+print(f"첫 번째 샘플 input_ids 길이: {len(tokenized_dataset[0]['input_ids'])}")
+
+# 길이 분포 확인
+lengths = [len(sample['input_ids']) for sample in tokenized_dataset]
+print(f"토큰 길이 - 최소: {min(lengths)}, 최대: {max(lengths)}, 평균: {sum(lengths)/len(lengths):.1f}")
+
+sample = tokenized_dataset[0]
+print(f"전체 토큰 수: {len(sample['input_ids'])}")
+
+print(f"input_ids 시작 15개: {sample['input_ids'][:15]}")
+print(f"input_ids 끝 15개: {sample['input_ids'][-15:]}")
+
+print(f"attention_mask 길이: {len(sample['attention_mask'])}")
+print(f"attention_mask 시작 15개: {sample['attention_mask'][:15]}")
+print(f"attention_mask 끝 15개: {sample['attention_mask'][-15:]}")
+print(f"모든 값이 1인가: {all(x == 1 for x in sample['attention_mask'])}")
+
+print(f"input_ids == labels: {sample['input_ids'] == sample['labels']}")
+print(f"labels 시작 15개: {sample['labels'][:15]}")
+
+# 학습 대상(-100이 아닌) 위치만 추리기
+learn = [i for i, l in enumerate(sample['labels']) if l != -100]
+print(f"학습 대상 토큰: {len(learn)}개 ({len(learn)/len(sample['labels'])*100:.1f}%)")
+print(f"학습 구간: {learn[0]} ~ {learn[-1]}")
+print(f"input_ids 학습 구간: {[sample['input_ids'][i] for i in learn]}")
+print(f"labels 학습 구간: {[sample['labels'][i] for i in learn]}")
+
+learn_ids = [sample['input_ids'][i] for i in learn]
+print(tokenizer.decode(learn_ids, skip_special_tokens=False))
+
+# [출력 결과]: 디코딩해 보면 <think>\n\n</think>\n\n{"category": …}<|im_end|>
+# 빈 think 블록 + JSON 답변 + 종료 토큰을 학습
+
+# 토크나이징 완료: 2939개 샘플
+
+# ===== 토크나이징 후 데이터셋 정보 =====
+# Dataset({
+#     features: ['text', 'input_ids', 'attention_mask', 'labels'],
+#     num_rows: 2939
+# })
+# 컬럼: ['text', 'input_ids', 'attention_mask', 'labels']
+# 첫 번째 샘플 input_ids 길이: 1685
+# 토큰 길이 - 최소: 619, 최대: 6885, 평균: 1398.7
+# 전체 토큰 수: 1685
+# input_ids 시작 15개: [151644, 8948, 198, 64795, 82528, 33704, 5140, 231, 112, 24897, 10764, 44104, 53189, 18411, 128618]
+# input_ids 끝 15개: [135257, 4080, 15, 13, 15, 16, 11334, 17877, 54116, 49664, 128836, 1189, 13989, 151645, 198]
+# attention_mask 길이: 1685
+# attention_mask 시작 15개: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+# attention_mask 끝 15개: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+# 모든 값이 1인가: True
+# input_ids == labels: False
+# labels 시작 15개: [-100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100, -100]
+# 학습 대상 토큰: 130개 (7.7%)
+# 학습 구간: 1554 ~ 1683
+# input_ids 학습 구간: [151667, 271, 151668, 271, 4913, 5471, 788, 330, 63089, 57089, 85057, 2198, 3087, 3180, 788, 220, 17, 1335, 12389, 788, 4383, 16, 22, 32077, 130092, 63089, 57089, 85057, 54321, 19391, 125686, 125548, 32290, 136905, 20401, 220, 18, 128514, 5140, 239, 246, 83666, 55673, 7, 16, 19, 32077, 54116, 129044, 8, 48408, 143083, 126932, 129865, 19969, 126614, 21329, 23259, 16560, 56419, 54330, 60960, 70582, 220, 15, 13, 15, 17, 4, 53900, 132772, 128836, 10465, 330, 65306, 20487, 131937, 139512, 129242, 143483, 60960, 55902, 48408, 143083, 19969, 129875, 126429, 126345, 4080, 15, 13, 15, 17, 4, 51018, 15, 11334, 12802, 63332, 128747, 42039, 137844, 144461, 34395, 11, 128677, 131793, 128618, 64795, 33704, 56419, 54330, 80573, 129381, 53900, 132772, 135257, 4080, 15, 13, 15, 16, 11334, 17877, 54116, 49664, 128836, 1189, 13989, 151645]
+# labels 학습 구간: [151667, 271, 151668, 271, 4913, 5471, 788, 330, 63089, 57089, 85057, 2198, 3087, 3180, 788, 220, 17, 1335, 12389, 788, 4383, 16, 22, 32077, 130092, 63089, 57089, 85057, 54321, 19391, 125686, 125548, 32290, 136905, 20401, 220, 18, 128514, 5140, 239, 246, 83666, 55673, 7, 16, 19, 32077, 54116, 129044, 8, 48408, 143083, 126932, 129865, 19969, 126614, 21329, 23259, 16560, 56419, 54330, 60960, 70582, 220, 15, 13, 15, 17, 4, 53900, 132772, 128836, 10465, 330, 65306, 20487, 131937, 139512, 129242, 143483, 60960, 55902, 48408, 143083, 19969, 129875, 126429, 126345, 4080, 15, 13, 15, 17, 4, 51018, 15, 11334, 12802, 63332, 128747, 42039, 137844, 144461, 34395, 11, 128677, 131793, 128618, 64795, 33704, 56419, 54330, 80573, 129381, 53900, 132772, 135257, 4080, 15, 13, 15, 16, 11334, 17877, 54116, 49664, 128836, 1189, 13989, 151645]
+# <think>
+
+# </think>
+
+# {"category": "부동산","event_count": 2,"events": ["17일 한국부동산원에 따르면 서울의 3월 둘째 주(14일 기준) 아파트 매매가격지수는 전주 대비 0.02% 하락했다.", "경기 지역 역시 재건축 대상 아파트가 많은 고양(-0.02%→0%)이 보합으로 돌아섰고, 성남 분당은 전주와 같은 하락폭(-0.01%)을 기록했다."]}<|im_end|>
+
+
+## 03_01_05
+# 길이가 다른 샘플 여러 개를 하나의 배치로 묶을 때 패딩과 어텐션 마스크가 어떻게 동작하는지 보여 주는 확인
+
+import torch
+
+# 길이가 다른 두 샘플(0번 1,685토큰, 1번 1,546토큰)을 가져옵니다.
+ex0 = tokenized_dataset[0]
+ex1 = tokenized_dataset[1]
+print(f"0번 데이터 길이: {len(ex0['input_ids'])}")
+print(f"1번 데이터 길이: {len(ex1['input_ids'])}")
+
+# 0번 데이터 길이: 1685
+# 1번 데이터 길이: 1546
+
+# 토크나이저의 패딩 기능으로 두 샘플을 같은 길이로 맞춰 하나의 배치로 구성
+# 특별히 GPU는 같은 길이의 텐서만 한 번에 처리할 수 있어서 이 과정이 필요합니다.
+
+batch = tokenizer.pad(
+    [{"input_ids": ex0["input_ids"], "attention_mask": ex0["attention_mask"]},
+     {"input_ids": ex1["input_ids"], "attention_mask": ex1["attention_mask"]}],
+    padding=True,
+    return_tensors="pt",
+)
+
+print("\n배치 처리 후:")
+print(f"입력 ID 형태: {tuple(batch['input_ids'].shape)}")
+print(f"어텐션 마스크 형태: {tuple(batch['attention_mask'].shape)}")
+
+# 배치 처리 후:
+# 입력 ID 형태: (2, 1685)
+# 어텐션 마스크 형태: (2, 1685)
+
+# 각 샘플의 마스크 합 = 실제 토큰 수, 0의 개수 = 패딩 수
+print(f"0번 샘플 마스크 합(실제 토큰 수): {batch['attention_mask'][0].sum().item()}")
+print(f"1번 샘플 마스크 합(실제 토큰 수): {batch['attention_mask'][1].sum().item()}")
+print(f"0번 샘플 0의 개수(패딩 수): {(batch['attention_mask'][0] == 0).sum().item()}")
+print(f"1번 샘플 0의 개수(패딩 수): {(batch['attention_mask'][1] == 0).sum().item()}")
+
+# 두 샘플의 마스크가 서로 다른가?
+print(f"\n두 샘플의 어텐션 마스크가 다른가? "
+      f"{not torch.equal(batch['attention_mask'][0], batch['attention_mask'][1])}")
+
+# 0번 샘플 마스크 합(실제 토큰 수): 1685
+# 1번 샘플 마스크 합(실제 토큰 수): 1546
+
+# 0번 샘플 0의 개수(패딩 수): 0
+# 1번 샘플 0의 개수(패딩 수): 139
+
+# 두 샘플의 어텐션 마스크가 다른가? True
+
+
+## 03_01_06
+## LoRA
+## 원래 모델의 가중치 17억 개는 그대로 얼려 두고, 작은 행렬만 새로 추가해서 그 부분만 학습
+## 원래 가중치 W는 고정합니다.
+## 대신 작은 행렬 A(r × 입력)와 B(출력 × r)를 덧붙여 출력을 W·x + (alpha/r)·B·A·x로 만듭니다. 처음에는 B가 0으로 시작하므로, 학습 전에는 베이스 모델과 결과가 똑같습니다.
+
+
+# LoRA 설정
+peft_config = LoraConfig(
+    r=16,                    # LoRA의 rank (낮을수록 파라미터 수 감소)
+    lora_alpha=32,          # LoRA 스케일링 파라미터( 출력에 곱하는 배율(alpha/r = 32/16 = 2))
+    lora_dropout=0.05,      # LoRA 레이어의 드롭아웃(과적합 방지)
+    bias="none",            # bias 파라미터 학습 여부
+    target_modules=["q_proj", "v_proj"],  # LoRA를 적용할 모듈
+    # 어텐션의 Query와 Value 변환에만 붙입니다. K, O, MLP는 그대로 둡니다.
+
+    task_type="CAUSAL_LM"   # 언어 모델링 태스크
+)
+
+# 모델에 LoRA 적용
+model = get_peft_model(model, peft_config)
+
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+total_params = sum(p.numel() for p in model.parameters())
+
+print("LoRA 적용 완료")
+print(f"학습 가능한 파라미터: {trainable_params:,}")
+print(f"전체 파라미터: {total_params:,}")
+print(f"학습 가능 비율: {trainable_params/total_params*100:.4f}%")
+
+# LoRA 적용 완료
+# 학습 가능한 파라미터: 3,211,264
+# 전체 파라미터: 1,723,786,240
+# 학습 가능 비율: 0.1863%
+
+# 출력 숫자 검산 (Qwen3-1.7B: 28층, hidden 2048)
+
+# q_proj(2048→2048): 16×2048 + 2048×16 = 65,536
+# v_proj(2048→1024): 16×2048 + 1024×16 = 49,152
+# (65,536 + 49,152) × 28층 = 3,211,264개로 출력과 정확히 일치합니다. 전체의 **0.19%**입니다.
+# 전체 파라미터 1,723,786,240개는 원래 1,720,574,976개에 LoRA 3,211,264개를 더한 값입니다.
