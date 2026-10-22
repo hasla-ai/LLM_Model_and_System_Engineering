@@ -1,16 +1,28 @@
 [project]
 name = "llm-serve"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "accelerate==1.8.1",
     "bitsandbytes==0.46.0",
-    "torch>=2.11.0",
-    "transformers==4.55.0",
+    "datasets",
+    "hf-transfer",
+    "pandas",
+    "peft==0.10.0",
+    "python-mecab-ko",
+    "rouge",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+    "transformers==4.55.2",
+    "trl==0.19.0",
+    "vllm==0.10.2; sys_platform == 'linux'",
 ]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
