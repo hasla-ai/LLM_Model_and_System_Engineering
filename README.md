@@ -25,6 +25,11 @@ This repository is my learning log as I work through the book and its public cod
 - **저자 | Authors:** 에디 유, 양기빈, 장지선, 조수현
 - **출판사 | Publisher:** 프리렉
 - **출간일 | Published:** 2026-09-28
+
+<p align="center">
+  <img src="assets/llm-master-cover.png" alt="LLM 마스터: 모델×시스템 엔지니어링 도서 이미지" width="420">
+</p>
+
 - **공개 예제 코드 | Public example code:** [freelec-llm-scientist/freelec_llm_scientist_code](https://github.com/freelec-llm-scientist/freelec_llm_scientist_code)
 - **함께 살펴보는 노트북 | Notebook reference:** [Chapter 2: Transformer](https://github.com/freelec-llm-scientist/freelec_llm_scientist_code/blob/main/chapter_02/chapter02_1_transformer.ipynb)
 

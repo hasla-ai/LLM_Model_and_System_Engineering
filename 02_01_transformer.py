@@ -217,6 +217,7 @@ params = [p for mat in all_matrices for row in mat for p in row]
 print(f"전체 파라미터 수: {len(params)}") # 전체 파라미터 수: 9888
 
 # 02_1_6
+
 # Add encoder position embeddings to each character embedding in "hello".
 # Project the first character's input vector into query, key, and value vectors.
 
@@ -242,3 +243,30 @@ print(f"'h'의 V (처음 4개): {[round(v.data, 4) for v in v0[:4]]}")
 # 'h'의 Q (처음 4개): [-0.0446, -0.0594, 0.0058, -0.0094]
 # 'h'의 K (처음 4개): [-0.0135, 0.1147, -0.0469, -0.0175]
 # 'h'의 V (처음 4개): [0.0111, 0.0075, 0.0316, 0.0137]
+
+# 02_1_7
+# Compute scaled dot-product attention scores for the first character against every character.
+# Use the first attention head's query and keys; these logits are not softmax probabilities.
+
+all_qs = [linear(xv, enc_wq) for xv in hello_vecs] # 각 문자입력 벡터에 각 가중치 적용한 Q, K, V 벡터.
+all_ks = [linear(xv, enc_wk) for xv in hello_vecs]
+all_vs = [linear(xv, enc_wv) for xv in hello_vecs]
+
+q_h = all_qs[0][0:head_dim] # head_dim 설정값 4
+k_h = [ki[0:head_dim] for ki in all_ks] # 각 문자의 K 벡터에서 헤드 0에 해당하는 앞의 4개 값
+
+attn_logits = [ # 각 문자에 대한 attention logits 계산_ Q_h * K_h /
+    sum(q_h[j] * k_h[t][j] for j in range(head_dim)) / head_dim**0.5
+    for t in range(len(k_h))
+] # h가 h, e, l, l, o 각각에 주는 점수
+
+print(f"'h'의 어텐션 점수 (헤드0, 스케일링 후):") # score.data는 자동미분용 Value 객체 안의 실제 숫자 값
+for i, (ch, score) in enumerate(zip("hello", attn_logits)):
+    print(f"  'h' → '{ch}': {round(score.data, 4)}")
+
+# 'h'의 어텐션 점수 (헤드0, 스케일링 후):
+#   'h' → 'h': -0.0032
+#   'h' → 'e': 0.0017
+#   'h' → 'l': -0.0004
+#   'h' → 'l': 0.0008
+#   'h' → 'o': -0.0014
