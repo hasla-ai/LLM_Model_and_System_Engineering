@@ -59,11 +59,11 @@ The book sets up Chapter 2 on Google Colab and Chapter 3 onward on RunPod cloud 
 | 3장 이후 · Chapter 3+ | RunPod 클라우드 GPU · RunPod cloud GPU | 로컬 CUDA GPU · Local CUDA GPU |
 | GPU | Colab T4 (16GB) 등 · and others | NVIDIA GeForce RTX 5060 Laptop GPU (8GB, Blackwell sm_120) |
 | 패키지 설치 · Install | 노트북 셀의 `!pip install` | `uv sync` ([pyproject.toml](pyproject.toml), [uv.lock](uv.lock)) |
-| Linux 전용 패키지 (vllm) · Linux-only packages | RunPod (Linux) | WSL2 Ubuntu (같은 로컬 GPU) · WSL2 Ubuntu on the same GPU |
+| 3장 실행 OS · Chapter 3 OS | RunPod (Linux) | WSL2 Ubuntu (같은 로컬 GPU) · WSL2 Ubuntu on the same GPU |
 
-GPU 연산이 없는 코드(02_01·02_02의 순수 Python 구현, 02_03의 토크나이저)는 그대로 실행하고, 모델을 GPU에 올리는 코드는 02_04부터입니다. 3장 평가에 쓰는 vllm은 Linux에서만 동작하므로 WSL2 Ubuntu에서 실행합니다([아래 참고](#wsl2에서-vllm-실행--running-vllm-on-wsl2)). 책의 예제가 8GB보다 큰 GPU 메모리를 전제로 하면, 로컬에 맞춰 조정한 내용을 이 README와 해당 코드에 기록합니다.
+GPU 연산이 없는 코드(02_01·02_02의 순수 Python 구현, 02_03의 토크나이저)는 그대로 실행하고, 모델을 GPU에 올리는 코드는 02_04부터입니다. 3장은 WSL2 Ubuntu에서 실행합니다. 평가에 쓰는 vllm이 Linux에서만 동작하고, Windows용 PyTorch에는 FlashAttention이 없어 긴 시퀀스 학습에서 메모리가 크게 늘기 때문입니다([아래 참고](#wsl2-ubuntu에서-실행--running-on-wsl2-ubuntu)). 책의 예제가 8GB보다 큰 GPU 메모리를 전제로 하면, 로컬에 맞춰 조정한 내용을 이 README와 해당 코드에 기록합니다.
 
-Code without GPU work (pure Python in 02_01 and 02_02, the tokenizer in 02_03) runs as is; loading models onto the GPU starts at 02_04. vLLM, used for evaluation in Chapter 3, runs only on Linux, so it runs in WSL2 Ubuntu. If an example assumes more than 8GB of GPU memory, the local adjustments are recorded here and in the code.
+Code without GPU work (pure Python in 02_01 and 02_02, the tokenizer in 02_03) runs as is; loading models onto the GPU starts at 02_04. Chapter 3 runs in WSL2 Ubuntu, because vLLM is Linux-only and the Windows PyTorch build lacks FlashAttention, which makes long-sequence training use far more memory. If an example assumes more than 8GB of GPU memory, the local adjustments are recorded here and in the code.
 
 ## 코드 변경 원칙 | Code Conventions
 
@@ -93,6 +93,32 @@ The book uses `device_map="auto"`, which picks devices from available memory. Lo
 | --- | --- | --- |
 | GPU를 찾지 못함 (CPU용 PyTorch 등) · No GPU found | 오류 없이 모델 전체를 CPU에 올려 매우 느려짐 · Silently loads on CPU | 바로 오류 · Fails immediately |
 | GPU 메모리 부족 · Not enough VRAM | 일부 층을 CPU에 두려다 4비트 모델이라 `ValueError`, 원인 파악이 어려움 · Unclear `ValueError` about CPU offload | 메모리 부족(OOM) 오류로 원인이 분명함 · Clear out-of-memory error |
+
+## 8GB 조정: 3장 SFT | 8GB Adjustments for Chapter 3 SFT
+
+책의 3장 학습은 RunPod의 80GB GPU를 기준으로 합니다. 그대로 실행하면 8GB VRAM을 크게 넘고, Windows 드라이버가 부족한 VRAM을 시스템 RAM으로 메우면서(Sysmem Fallback) 컴퓨터가 멈출 수 있습니다. 메모리를 가장 많이 쓰는 부분은 손실 계산에 쓰이는 logits입니다. logits는 모든 위치에서 어휘 151,936개의 점수를 계산한 값으로, 토큰 하나당 약 1.5MB를 차지합니다. 실제로 학습하는 정답은 전체 토큰의 약 7.7%뿐입니다.
+
+The book's Chapter 3 training assumes an 80GB RunPod GPU. Run as is, it far exceeds 8GB of VRAM, and the Windows driver's sysmem fallback can freeze the machine. Most of the memory goes to the logits (151,936 vocabulary scores at every position, about 1.5MB per token), even though only about 7.7% of the tokens are trained on.
+
+| 항목 · Item | 책 · Book | 이 저장소 · This repository | 이유 · Reason |
+| --- | --- | --- | --- |
+| 모델 로드 (03) | dtype 미지정 → float32 (6.9GB) | `torch_dtype=torch.bfloat16` (3.4GB) | `bf16=True` 학습과 일치, 가중치 메모리 절반 |
+| 배치 (07) | 배치 2, 누적 2 | 배치 1, 누적 4 | 유효 배치 4는 같음. 긴 샘플에 맞춘 패딩이 사라짐 |
+| 손실 계산 (07) | 전체 길이의 logits | `AnswerOnlyLossTrainer`: 정답 위치에서만 `lm_head` 계산 | 손실 값은 같고, logits 메모리는 정답 길이만큼만 사용 |
+| VRAM 상한 (00) | 없음 | `torch.cuda.set_per_process_memory_fraction(0.85)` | 넘으면 RAM을 빌려 쓰지 않고 OOM 오류로 안전하게 멈춤 |
+| 어텐션 (00·07) | FlashAttention (Linux) | WSL: `FLASH_ATTENTION` 고정 / Windows: GQA 경로를 끄고 `EFFICIENT_ATTENTION` | Windows PyTorch에는 FlashAttention이 없어 GQA 어텐션이 L×L 행렬(math 방식)로 계산되며 OOM |
+| 사전 시험 (07) | 없음 | `TEST_RUN`: 가장 긴 샘플 8개로 2스텝 | 본 학습 전에 최대 메모리와 속도 확인 |
+| 비교 모델 로드 (08) | 베이스·LoRA 모델 두 벌 (6.9GB) | 베이스 한 벌 + 어댑터, `disable_adapter()`로 베이스 출력 | 메모리 절반 |
+| 생성 길이 (09) | `max_length=8192` | `max_new_tokens=1024` | 반복 생성 방지, 03_2 평가와 같은 기준 |
+| RunPod 캐시 (01) | `/workspace` 캐시 지정 | 주석 처리 | 로컬은 기본 Hugging Face 캐시 사용 |
+
+**결과 (RTX 5060 Laptop 8GB, WSL2):**
+- **사전 시험:** 가장 긴 샘플(6,885토큰) 기준 최대 GPU 메모리 4.84GB, 스텝당 8.9초
+- **본 학습:** 735스텝을 1,772초(약 29.5분) 동안 학습
+- **loss:** 0.169(100스텝) → 0.059(600스텝), 전체 평균 0.076
+- **정답 토큰 정확도:** 97.0% → 98.2%
+
+**Results (RTX 5060 Laptop 8GB, WSL2):** a dry run on the longest samples (6,885 tokens) peaked at 4.84GB at 8.9 s/step. Full training ran 735 steps in 1,772 s (about 29.5 minutes). Loss went from 0.169 at step 100 to 0.059 at step 600 (average 0.076), and answer-token accuracy went from 97.0% to 98.2%.
 
 ## 로컬 CUDA 설정 및 실행 | Local CUDA Setup
 
@@ -146,11 +172,15 @@ uv run python .\02_04_llm_inference.py
 
 **02_04:** On first run, the script downloads the `Qwen/Qwen3-4B-Instruct-2507` weights (about 8GB). Loaded in 4-bit, the model uses about 2.5GB of GPU memory. The setup is correct when every parameter is on `cuda:0` and there are 252 `Linear4bit` layers.
 
-### WSL2에서 vllm 실행 | Running vLLM on WSL2
+### WSL2 Ubuntu에서 실행 | Running on WSL2 Ubuntu
 
-vllm은 Linux용 패키지만 제공되므로 Windows에서는 설치되지 않습니다(`pyproject.toml`에서 `sys_platform == 'linux'`일 때만 설치). 3장 평가처럼 vllm이 필요한 코드는 WSL2 Ubuntu에서 실행합니다. WSL2는 Windows의 NVIDIA 드라이버로 같은 GPU를 사용하므로, Ubuntu 안에 NVIDIA 드라이버를 따로 설치하지 않습니다.
+3장은 WSL2 Ubuntu에서 실행합니다. 이유는 두 가지입니다.
+- **vllm:** Linux용 패키지만 있어서 Windows에서는 설치되지 않습니다(`sys_platform == 'linux'`일 때만 설치).
+- **FlashAttention:** Linux용 PyTorch에는 들어 있습니다. PyTorch 2.8은 sm80~sm121을 지원하므로 RTX 5060(sm_120)에서 GQA와 함께 동작합니다.
 
-vLLM ships Linux wheels only, so it is skipped on Windows (installed only when `sys_platform == 'linux'`). Code that needs vLLM, such as the Chapter 3 evaluation, runs in WSL2 Ubuntu, which uses the same GPU through the Windows NVIDIA driver. Do not install an NVIDIA driver inside Ubuntu.
+WSL2는 Windows의 NVIDIA 드라이버로 같은 GPU를 쓰므로, Ubuntu 안에 드라이버를 따로 설치하지 않습니다. 코드는 Windows의 저장소 폴더에서 VS Code로 편집하고, Ubuntu에서는 그 폴더(`/mnt/c/...`)를 그대로 실행합니다. Linux용 가상환경은 Windows `.venv`와 섞이지 않도록 Ubuntu 홈 폴더에 따로 만듭니다. Hugging Face 캐시는 Windows 쪽을 함께 써서 모델을 다시 받지 않습니다.
+
+Chapter 3 runs in WSL2 Ubuntu: vLLM ships Linux wheels only, and the Linux PyTorch build includes FlashAttention, which in PyTorch 2.8 supports sm80–sm121, so it runs with GQA on the RTX 5060 (sm_120). WSL2 uses the GPU through the Windows NVIDIA driver, so do not install a driver inside Ubuntu. Code is edited on Windows and run from the same folder (`/mnt/c/...`) in Ubuntu, with a separate Linux virtual environment in the Ubuntu home folder and the Windows Hugging Face cache shared to avoid re-downloads.
 
 ```powershell
 # Windows PowerShell: Ubuntu 설치 (처음 한 번, Linux 사용자 이름과 비밀번호를 정함)
@@ -158,22 +188,40 @@ wsl --install -d Ubuntu-24.04
 ```
 
 ```bash
-# Ubuntu 안에서 실행
+# Ubuntu 안에서 실행 (처음 한 번)
 nvidia-smi                                   # Windows 드라이버로 GPU가 보이는지 확인
 sudo apt update && sudo apt install -y git build-essential
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.local/bin/env
 
-# 저장소는 /mnt/c가 아니라 Linux 홈 폴더에 클론 (파일 입출력이 빠르고 .venv가 Windows와 섞이지 않음)
-git clone https://github.com/hasla-ai/LLM_Model_and_System_Engineering.git ~/llm_serve
-cd ~/llm_serve
-uv sync                                      # Linux에서는 vllm까지 설치됨
-uv run python -c "import torch, vllm; print(vllm.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+# 작업용 명령 llm: 저장소 폴더로 이동하고 Linux 가상환경과 HF 캐시 위치를 지정
+cat >> ~/.bashrc <<'EOF'
+llm() {
+  export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/llm_serve"
+  export HF_HOME="/mnt/c/Users/hrjeo/.cache/huggingface"
+  cd /mnt/c/Users/hrjeo/llm_serve
+}
+EOF
+source ~/.bashrc
+
+llm
+uv sync --locked                             # Linux에서는 vllm까지 설치됨
+uv run python -c "import torch, vllm; print(vllm.__version__, torch.cuda.get_device_name(0), torch.backends.cuda.is_flash_attention_available())"
 ```
 
-WSL의 Hugging Face 캐시(`~/.cache/huggingface`)는 Windows와 따로 있으므로 모델을 처음 쓸 때 한 번 더 내려받습니다. Windows에서 만든 학습 결과(예: LoRA 어댑터, 평가셋 파일)는 `/mnt/c/Users/<사용자>/llm_serve/`에서 복사해 씁니다.
+⚠️ Ubuntu에서 uv를 쓰기 전에는 **반드시 `llm`을 먼저 실행합니다.** 그러지 않으면 uv가 저장소의 Windows용 `.venv`를 건드립니다. `HF_HOME` 경로는 본인의 Windows 사용자 폴더에 맞게 바꿉니다.
 
-The Hugging Face cache in WSL is separate from Windows, so models are downloaded again on first use. Copy outputs produced on Windows (such as LoRA adapters and evaluation splits) from `/mnt/c/Users/<user>/llm_serve/`.
+⚠️ Always run `llm` before using uv in Ubuntu; otherwise uv touches the repository's Windows `.venv`. Adjust the `HF_HOME` path to your Windows user folder.
+
+```bash
+# 3장 학습 (03_01): TEST_RUN = True로 메모리·속도를 먼저 확인한 뒤 False로 본 학습
+llm
+uv run python 03_01_sllm_summary_finetuning.py
+```
+
+**Hugging Face 업로드:** 모델을 Hub에 올릴 때는 토큰을 코드에 쓰지 않고, 터미널에서 `uv run hf auth login`으로 한 번 로그인합니다. 토큰이 `HF_HOME`에 저장되어 코드에서 자동으로 쓰입니다. 이 저장소는 공개 저장소이므로 토큰이 커밋되면 그대로 노출됩니다. 토큰은 Write 권한으로 만듭니다.
+
+**Hugging Face uploads:** never put the token in code. Log in once with `uv run hf auth login`; the token is stored under `HF_HOME` and picked up automatically. This repository is public, so a committed token would be exposed. Create the token with write permission.
 
 ## 저장소 구성 | Repository Contents
 
@@ -187,6 +235,7 @@ Code files remain in the repository root and are organized by filename and secti
 | [`02_02_transformer_model_BERT_and_GPT.py`](02_02_transformer_model_BERT_and_GPT.py) | BERT와 GPT 구조 비교 · BERT and GPT architecture |
 | [`02_03_llm_chat_template.py`](02_03_llm_chat_template.py) | 토큰화와 채팅 템플릿 적용 · Tokenization and chat templates |
 | [`02_04_llm_inference.py`](02_04_llm_inference.py) | GPU 점검, 4비트 양자화 모델 로드와 추론 · GPU checks, 4-bit model loading, and inference |
+| [`03_01_sllm_summary_finetuning.py`](03_01_sllm_summary_finetuning.py) | 뉴스 이벤트 추출 데이터로 Qwen3-1.7B LoRA SFT, 8GB 조정과 학습 전후 비교 · LoRA SFT of Qwen3-1.7B for news event extraction on 8GB |
 
 ## 실험 원칙 | How I Learn
 
