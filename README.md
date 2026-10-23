@@ -305,6 +305,10 @@ Code files remain in the repository root and are organized by filename and secti
 | [`02_03_llm_chat_template.py`](02_03_llm_chat_template.py) | 토큰화와 채팅 템플릿 적용 · Tokenization and chat templates |
 | [`02_04_llm_inference.py`](02_04_llm_inference.py) | GPU 점검, 4비트 양자화 모델 로드와 추론 · GPU checks, 4-bit model loading, and inference |
 | [`03_01_sllm_summary_finetuning.py`](03_01_sllm_summary_finetuning.py) | 뉴스 이벤트 추출 데이터로 Qwen3-1.7B LoRA SFT, 8GB 조정과 학습 전후 비교 · LoRA SFT of Qwen3-1.7B for news event extraction on 8GB |
+| [`03_02_sllm_finetuning_eval.py`](03_02_sllm_finetuning_eval.py) | vLLM으로 베이스·LoRA 평가, ROUGE와 평가 설계 한계 · vLLM evaluation of base vs. LoRA |
+| [`04_01_vlm_finetuning.py`](04_01_vlm_finetuning.py) | Qwen3-VL-4B 4비트 QLoRA로 패션 속성 추출 학습 (8GB) · 4-bit QLoRA of Qwen3-VL-4B on 8GB |
+| [`09_llm_agents.py`](09_llm_agents.py) | 9장 에이전트 네 파트(ReAct, 펑션 콜링, 예외 처리·병렬, Text-to-SQL)를 한 파일로, 파트별 실행과 로그 저장 · Chapter 9 agents in one file |
+| [`09_llm_agents.md`](09_llm_agents.md) | 9장 실험 분석: 관찰 결과를 GPT-4 이후 주요 논문의 흐름과 연결 · Chapter 9 analysis linked to post-GPT-4 papers |
 
 ## 실험 원칙 | How I Learn
 
