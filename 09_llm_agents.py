@@ -384,9 +384,192 @@ def part_09_02():
 
 
 def part_09_03():
-    ## 09_03_01 도구 호출 거부와 예외 처리 (작성 예정)
-    # 노트북의 최상위 await는 .py에서 쓸 수 없으므로 asyncio.run(...)으로 바꾼다
-    print("09_03: 아직 작성 전")
+    '''
+    예외 처리와 병렬 실행: 도구 호출이 실패하거나 LLM이 인자를 잘못 줄 때 버티는 방법, 여러 도구를 동시에 실행하는 방법
+    09_03_01 준비 / 09_03_02 유효성 검사(pydantic) / 09_03_03 재시도(tenacity) / 09_03_04 세 기법 통합 / 09_03_05 병렬 실행(asyncio)
+    '''
+
+    ## 09_03_01 준비: 09_03_05 병렬 실행에서 쓸 도구와 tool_calls(ai_msg) 만들기 (09_02_04와 같은 코드)
+
+    # import nest_asyncio; nest_asyncio.apply()   # .py에서는 필요 없음 (09_00 참고)
+
+    import yfinance as yf
+    import warnings
+    warnings.filterwarnings("ignore")  # 불필요한 경고 메시지 숨김
+
+    from langchain_openai import ChatOpenAI
+    from langchain_core.tools import tool
+
+    # 1. 실제 금융 데이터 API 도구 (Yahoo Finance 연동)
+    @tool
+    def get_stock_price(symbol: str) -> str:
+        """특정 종목의 실시간 주가 정보를 조회합니다.
+        주의: 한국 주식은 반드시 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            # fast_info를 사용하면 가볍고 빠르게 현재가를 가져옵니다.
+            price = ticker.fast_info['last_price']
+            return f"{symbol}의 현재 주가는 {price:,.0f}원입니다."
+        except Exception as e:
+            return f"주가 정보를 가져오는 데 실패했습니다. 심볼을 확인해주세요: {symbol}"
+
+    @tool
+    def get_exchange_rate(currency_pair: str = "USDKRW=X") -> str:
+        """환율 정보를 조회합니다. 기본값은 USD/KRW 환율을 의미하는 'USDKRW=X'입니다."""
+        try:
+            ticker = yf.Ticker(currency_pair)
+            rate = ticker.fast_info['last_price']
+            return f"현재 {currency_pair} 환율은 {rate:,.2f}원입니다."
+        except Exception as e:
+            return f"환율 정보를 가져오는 데 실패했습니다: {currency_pair}"
+
+    @tool
+    def summarize_financials(symbol: str) -> str:
+        """특정 기업의 재무 요약 정보(매출, 영업이익률 등)를 제공합니다.
+        주의: 한국 주식은 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            revenue = info.get('totalRevenue', 0)
+            margins = info.get('operatingMargins', 0) * 100
+            # 매출을 보기 쉽게 조 단위로 변환
+            if revenue > 0:
+                revenue_str = f"{revenue / 1_000_000_000_000:.2f}조 원"
+            else:
+                revenue_str = "정보 없음"
+            return f"{symbol}의 최근 매출은 {revenue_str}이며, 영업이익률은 약 {margins:.2f}%입니다."
+        except Exception as e:
+            return f"재무 정보를 불러오는 데 실패했습니다: {symbol}"
+
+    # 2. 모델 초기화 및 도구 바인딩
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    tools = [get_stock_price, get_exchange_rate, summarize_financials]
+    llm_with_tools = llm.bind_tools(tools)
+
+    # 3. 에이전트 실행 로직 (여기서 받은 ai_msg.tool_calls를 09_03_05에서 동시에 실행)
+    user_input = "삼성전자 주가와 현재 환율, 그리고 삼성전자의 재무 상태를 요약해줘."
+    ai_msg = llm_with_tools.invoke(user_input)
+
+    ## 09_03_02 유효성 검사 레이어 구축 (책 9.5.1)
+    # LLM이 넘긴 인자를 도구 실행 전에 검사한다. 규칙에 어긋나면 ValueError
+
+    from pydantic import BaseModel, Field, field_validator
+
+    class StockQuerySchema(BaseModel):
+        symbol: str = Field(..., description="종목 코드")
+
+        @field_validator("symbol")
+        @classmethod
+        def validate_symbol(cls, v: str):
+            if not v.isupper():
+                raise ValueError("종목 코드는 반드시 대문자여야 합니다.")
+            return v
+
+    ## 09_03_03 Tenacity를 이용한 재시도 메커니즘
+    # 일시적인 네트워크 오류는 기다렸다가 다시 시도한다 (정의만 하고 호출하지 않음, 주소는 예시용)
+
+    import requests
+    from tenacity import retry, stop_after_attempt, wait_exponential
+
+    @retry(
+        stop=stop_after_attempt(3),                      # 최대 3번까지 재시도
+        wait=wait_exponential(multiplier=1, min=4, max=10),  # 대기 시간을 지수적으로 증가
+        reraise=True                                     # 3번 모두 실패하면 원래 예외 발생
+    )
+    def call_external_api(query):
+        response = requests.get(f"https://api.finance.com/v1/{query}")
+        response.raise_for_status()
+        return response.json()
+
+    # 자율적 오류 수정(Self-Correction) 루프: 책은 설명만 있음.
+    # 도구가 예외를 던지는 대신 "무엇이 틀렸는지" 문장을 돌려주면, 그 문장이 에이전트의 Observation이 되어
+    # LLM이 인자를 고쳐서 다시 호출한다 (09_03_04의 except 블록이 이 역할).
+
+    ## 09_03_04 세 가지 기법의 통합 (검증 + 재시도 + 오류 메시지 반환)
+
+    from langchain_classic.tools import StructuredTool
+
+    class StockQuerySchema(BaseModel):
+        symbol: str = Field(..., description="종목 코드 (반드시 대문자, 예: AAPL, 005930.KS)")
+
+        @field_validator("symbol")
+        @classmethod
+        def validate_symbol(cls, v: str):
+            if not v.isupper():
+                raise ValueError(f"종목 코드 '{v}'는 반드시 대문자여야 합니다. 예: AAPL, 005930.KS")
+            return v
+
+    @retry(
+        stop=stop_after_attempt(3),                      # 최대 3번 재시도
+        wait=wait_exponential(multiplier=1, min=4, max=10),  # 대기 간격을 지수적으로 늘리되 4~10초로 제한
+        reraise=True                                     # 3번 모두 실패 시 원래 예외 발생
+    )
+    def _fetch_stock_price_from_api(symbol: str) -> dict:
+        """실제 외부 API를 호출하는 내부 함수. 에러 시 자동 재시도합니다."""
+        response = requests.get(
+            f"https://api.finance.com/v1/quote?symbol={symbol}", timeout=5
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_stock_price_safe(symbol: str) -> str:
+        """Pydantic 검증 + Tenacity 재시도가 적용된 주가 조회 함수"""
+        try:
+            # 1단계: Pydantic으로 입력값 검증
+            validated = StockQuerySchema(symbol=symbol)
+            # 2단계: Tenacity 재시도 보호 하에 API 호출
+            data = _fetch_stock_price_from_api(validated.symbol)
+            price = data.get("price", "알 수 없음")
+            return f"{validated.symbol}의 현재 주가는 {price}원입니다."
+        except ValueError as e:
+            # Pydantic 검증 실패: LLM이 잘못된 형식으로 인자를 넘긴 경우
+            # 이 메시지가 Observation으로 에이전트에 전달되어 Self-Correction을 트리거합니다.
+            return f"입력값 오류: {e} 종목 코드를 대문자로 다시 입력해주세요."
+        except Exception as e:
+            # API 호출 최종 실패 (3번 재시도 후에도 실패)
+            return f"API 호출 실패: {e}. 잠시 후 다시 시도하거나 다른 종목을 조회해주세요."
+
+    # AgentExecutor에 등록할 때는 StructuredTool로 래핑
+    safe_stock_tool = StructuredTool(
+        name="get_stock_price_safe",
+        func=get_stock_price_safe,
+        description="특정 종목의 현재 주가를 조회합니다. 종목 코드는 반드시 대문자로 입력하세요 (예: AAPL, 005930.KS).",
+        args_schema=StockQuerySchema
+    )
+
+    # (추가) 동작 확인: 책은 정의만 하고 호출하지 않으므로 직접 불러 본다 (OpenAI API 호출 없음)
+    # ① 소문자 → pydantic 검증에서 바로 걸려 "입력값 오류" 문장을 돌려줌 (네트워크 호출 없음)
+    print(get_stock_price_safe("aapl"))
+    # ② 대문자 → 검증 통과 후 예시 주소(api.finance.com) 호출이 실패 → 4초씩 기다리며 3번 시도한 뒤 "API 호출 실패"
+    print(get_stock_price_safe("AAPL"))
+
+    ## 09_03_05 병렬 실행 (asyncio, 책 9.5.2)
+    # 09_02_04는 tool_calls를 for 문으로 하나씩 실행했다. 여기서는 동시에 실행한다.
+
+    import asyncio
+
+    selected_tool = {
+        "get_stock_price": get_stock_price,
+        "get_exchange_rate": get_exchange_rate,
+        "summarize_financials": summarize_financials,
+    }
+
+    async def call_one(tool_call):
+        tool = selected_tool[tool_call["name"].lower()]
+        # yfinance 호출은 동기(blocking) 함수이므로, 별도 스레드에서 실행해
+        # 이벤트 루프를 막지 않도록 asyncio.to_thread로 감쌉니다.
+        return await asyncio.to_thread(tool.invoke, tool_call["args"])
+
+    async def run_parallel(ai_msg):
+        # gather가 모든 호출을 동시에 시작하고, 전부 끝날 때까지 기다립니다.
+        return await asyncio.gather(*[call_one(tc) for tc in ai_msg.tool_calls])
+
+    # results = await run_parallel(ai_msg)  # 노트북에서는 nest_asyncio 덕분에 await를 바로 사용
+    results = asyncio.run(run_parallel(ai_msg))   # .py에는 최상위 await가 없으므로 asyncio.run으로 실행
+    for r in results:
+        print(r)
 
 
 def part_09_04():
