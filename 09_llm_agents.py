@@ -146,8 +146,224 @@ Thought:{agent_scratchpad}'''
 
 
 def part_09_02():
-    ## 09_02_01 함수 스키마 되짚기 (작성 예정)
-    print("09_02: 아직 작성 전")
+    '''
+    펑션 콜링: LLM이 도구 호출을 JSON(함수 이름 + 인자)으로 제안하고, 실제 실행은 코드가 한다
+    09_02_01 함수 스키마 / 09_02_02 bind_tools / 09_02_03 FC + ReAct (멀티턴 메모리) / 09_02_04 병렬 도구 제안
+    '''
+
+    ## 09_02_01 함수 스키마 되짚기 (책 9.4.1)
+    # LLM에게 전달되는 도구 설명서의 실제 모양 (bind_tools가 내부에서 이 형식을 만들어 줌)
+
+    # 노트북은 셀의 마지막 값을 화면에 보여 주지만 .py는 그렇지 않으므로 변수에 담아 출력
+    weather_schema = {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "특정 지역의 현재 날씨를 조회합니다.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "조회할 지역 이름"}
+                },
+                "required": ["location"]
+            }
+        }
+    }
+    print(weather_schema)
+
+    ## 09_02_02 bind_tools로 도구 붙이기 (책 9.4.2)
+
+    import requests
+    import warnings
+    warnings.filterwarnings("ignore")
+
+    from langchain_openai import ChatOpenAI
+    from langchain_core.tools import tool
+
+    # 1. 실제 날씨 API 도구 정의 (Open-Meteo 사용)
+    @tool
+    def get_weather(location: str) -> str:
+        """특정 지역의 현재 날씨와 기온을 조회합니다.
+        location: 조회할 도시 이름. (주의: API 검색을 위해 '서울'은 'Seoul'처럼 반드시 영문으로 번역해서 입력하세요)
+        """
+        try:
+            # Step 1: 도시 이름을 위도 경도로 변환 (Geocoding API)
+            geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1&language=ko"
+            geo_resp = requests.get(geo_url).json()
+            if "results" not in geo_resp:
+                return f"{location}의 좌표를 찾을 수 없습니다. 도시 이름을 영어로 다시 시도해보세요."
+            lat = geo_resp["results"][0]["latitude"]
+            lon = geo_resp["results"][0]["longitude"]
+            # Step 2: 위경도를 바탕으로 현재 기온 풍속 조회 (Forecast API)
+            weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+            weather_resp = requests.get(weather_url).json()
+            current = weather_resp.get("current_weather", {})
+            temp = current.get("temperature", "알 수 없음")
+            windspeed = current.get("windspeed", "알 수 없음")
+            return f"{location}의 현재 기온은 {temp}도이며, 풍속은 {windspeed}km/h입니다."
+        except Exception as e:
+            return f"날씨 정보를 불러오는 중 에러가 발생했습니다: {e}"
+
+    # 2. 모델 초기화 및 도구 바인딩
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    # bind_tools로 모델에게 "필요하면 이 도구를 써도 좋아"라고 JSON 스키마를 전달
+    llm_with_tools = llm.bind_tools([get_weather])
+
+    # 3. 모델 호출
+    user_query = "지금 서울 날씨 어때? 덥진 않아?"
+    response = llm_with_tools.invoke(user_query)
+
+    # 4. Function Calling 결과 파싱 및 실행
+    # 모델이 일반 텍스트 대신 함수 호출(tool_calls)을 제안했는지 확인
+    if response.tool_calls:
+        tool_call = response.tool_calls[0]
+        name = tool_call["name"]
+        args = tool_call["args"]
+        print(f"[LLM의 판단 (Function Calling)]")
+        print(f"호출할 함수: {name}")
+        print(f"추출된 인자: {args}\n")
+        # 5. 애플리케이션 단에서 실제 파이썬 함수를 실행
+        result = get_weather.invoke(args)
+        print(f"[실측 데이터 결과]\n{result}")
+    else:
+        print(response.content)
+
+    ## 09_02_03 펑션 콜링에 추론 교차를 얹기 (FC + ReAct, 책 9.4.3)
+
+    from langchain_classic.agents import AgentExecutor, create_openai_functions_agent
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+    from langchain_community.chat_message_histories import ChatMessageHistory
+    from langchain_core.runnables.history import RunnableWithMessageHistory
+    from langchain_classic.tools import Tool, StructuredTool
+    from pydantic import BaseModel, Field
+
+    # 1. 도구(Tools) 정의 (실제 API 대신 고정된 문자열을 돌려주는 예시 도구)
+    def get_stock_history(symbol: str, period: str):
+        # 실제 환경에서는 DB나 API에서 기간별 데이터를 가져오는 로직이 들어갑니다.
+        return f"{symbol}의 {period} 동안 주가는 96,500원에서 190,000원으로 96.9% 상승했습니다."
+
+    def get_financial_news(symbol: str):
+        return f"{symbol} 관련 뉴스: 차세대 AI 메모리 HBM4의 양산 소식과 가격 인상 협상에 따른 수익성 개선 기대감 고조."
+
+    # 인자가 2개인 도구는 pydantic 스키마로 각 인자의 이름·설명을 알려 준다
+    class StockHistoryInput(BaseModel):
+        symbol: str = Field(description="주가 이력을 조회할 종목 코드 또는 이름")
+        period: str = Field(description="주가 이력을 조회할 기간 (예: '최근 3개월', '1년')")
+
+    tools = [
+        StructuredTool(
+            name="get_stock_history",
+            func=get_stock_history,
+            description="특정 종목(symbol)의 주어진 기간(period) 동안 주가 이력을 조회합니다.",
+            args_schema=StockHistoryInput
+        ),
+        Tool(name="get_financial_news", func=get_financial_news,
+             description="특정 종목의 최신 금융 뉴스를 가져옵니다.")
+    ]
+
+    # 2. 메모리가 포함된 프롬프트 설계
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "너는 금융 데이터를 분석하는 전문 에이전트야. 도구를 사용하여 정확한 정보를 제공해."),
+        MessagesPlaceholder(variable_name="chat_history"),      # 이전 턴들의 대화 (멀티턴)
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),  # 이번 턴의 도구 호출 과정 (멀티스텝)
+    ])
+
+    # 3. 모델 및 에이전트 설정
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    agent = create_openai_functions_agent(llm, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+    # 4. 세션별 메모리 관리 (멀티턴의 핵심)
+    demo_chat_history = ChatMessageHistory()
+
+    conversational_agent_executor = RunnableWithMessageHistory(
+        agent_executor,
+        lambda session_id: demo_chat_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+    )
+
+    # 5. 실행 (연쇄 사고 테스트)
+    response = conversational_agent_executor.invoke(
+        {"input": "최근 3개월 동안 삼성전자 주가 변동률과 관련 최신 뉴스 요약을 알려줘"},
+        config={"configurable": {"session_id": "ch09_test_01"}}
+    )
+    print(response["output"])
+
+    ## 09_02_04 여러 도구를 한 번에 병렬 제안 (책 9.4.4)
+
+    import yfinance as yf
+
+    # 1. 실제 금융 데이터 API 도구 (Yahoo Finance 연동)
+    @tool
+    def get_stock_price(symbol: str) -> str:
+        """특정 종목의 실시간 주가 정보를 조회합니다.
+        주의: 한국 주식은 반드시 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            # fast_info를 사용하면 가볍고 빠르게 현재가를 가져옵니다.
+            price = ticker.fast_info['last_price']
+            return f"{symbol}의 현재 주가는 {price:,.0f}원입니다."
+        except Exception as e:
+            return f"주가 정보를 가져오는 데 실패했습니다. 심볼을 확인해주세요: {symbol}"
+
+    @tool
+    def get_exchange_rate(currency_pair: str = "USDKRW=X") -> str:
+        """환율 정보를 조회합니다. 기본값은 USD/KRW 환율을 의미하는 'USDKRW=X'입니다."""
+        try:
+            ticker = yf.Ticker(currency_pair)
+            rate = ticker.fast_info['last_price']
+            return f"현재 {currency_pair} 환율은 {rate:,.2f}원입니다."
+        except Exception as e:
+            return f"환율 정보를 가져오는 데 실패했습니다: {currency_pair}"
+
+    @tool
+    def summarize_financials(symbol: str) -> str:
+        """특정 기업의 재무 요약 정보(매출, 영업이익률 등)를 제공합니다.
+        주의: 한국 주식은 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            revenue = info.get('totalRevenue', 0)
+            margins = info.get('operatingMargins', 0) * 100
+            # 매출을 보기 쉽게 조 단위로 변환
+            if revenue > 0:
+                revenue_str = f"{revenue / 1_000_000_000_000:.2f}조 원"
+            else:
+                revenue_str = "정보 없음"
+            return f"{symbol}의 최근 매출은 {revenue_str}이며, 영업이익률은 약 {margins:.2f}%입니다."
+        except Exception as e:
+            return f"재무 정보를 불러오는 데 실패했습니다: {symbol}"
+
+    # 2. 모델 초기화 및 도구 바인딩
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    tools = [get_stock_price, get_exchange_rate, summarize_financials]
+    llm_with_tools = llm.bind_tools(tools)
+
+    # 3. 에이전트 실행 로직 (한 번의 응답에 tool_calls가 여러 개 들어올 수 있음)
+    user_input = "삼성전자 주가와 현재 환율, 그리고 삼성전자의 재무 상태를 요약해줘."
+    ai_msg = llm_with_tools.invoke(user_input)
+
+    # 4. 도구 호출 제안 확인 및 실제 실행
+    if ai_msg.tool_calls:
+        print("=== [LLM의 도구 호출 제안 및 실행 결과] ===\n")
+        for tool_call in ai_msg.tool_calls:
+            # tool_call["name"]과 실제 함수 객체를 매핑
+            selected_tool = {
+                "get_stock_price": get_stock_price,
+                "get_exchange_rate": get_exchange_rate,
+                "summarize_financials": summarize_financials
+            }[tool_call["name"].lower()]
+            # 도구 실제 실행
+            tool_output = selected_tool.invoke(tool_call["args"])
+            print(f"[실행 도구]: {tool_call['name']}")
+            print(f"[입력 파라미터]: {tool_call['args']}")
+            print(f"[실측 결과]: {tool_output}\n")
+    else:
+        print(ai_msg.content)
 
 
 def part_09_03():
