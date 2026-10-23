@@ -7,6 +7,11 @@
   09_04 Text-to-SQL         
 
   개별 실행
+
+  기록 (실행 결과는 각 섹션 아래 [실행 결과] 주석에도 핵심만 남김)
+    - 원본 로그: logs/09/<파트>_<시각>.log  (실행할 때 자동 저장, 커밋하지 않음)
+    - 상세 분석: 09_llm_agents.md          (관찰을 GPT-4 이후 주요 논문 흐름과 연결한 긴 노트)
+    - 압축 요약: 09_agents_analysis.md     (파트별 결과와 핵심 관찰을 한 장으로)
   '''
 
 import os, sys, getpass, asyncio

@@ -308,7 +308,7 @@ Code files remain in the repository root and are organized by filename and secti
 | [`03_02_sllm_finetuning_eval.py`](03_02_sllm_finetuning_eval.py) | vLLM으로 베이스·LoRA 평가, ROUGE와 평가 설계 한계 · vLLM evaluation of base vs. LoRA |
 | [`04_01_vlm_finetuning.py`](04_01_vlm_finetuning.py) | Qwen3-VL-4B 4비트 QLoRA로 패션 속성 추출 학습 (8GB) · 4-bit QLoRA of Qwen3-VL-4B on 8GB |
 | [`09_llm_agents.py`](09_llm_agents.py) | 9장 에이전트 네 파트(ReAct, 펑션 콜링, 예외 처리·병렬, Text-to-SQL)를 한 파일로, 파트별 실행과 로그 저장 · Chapter 9 agents in one file |
-| [`09_llm_agents.md`](09_llm_agents.md) | 9장 실험 분석: 관찰 결과를 GPT-4 이후 주요 논문의 흐름과 연결 · Chapter 9 analysis linked to post-GPT-4 papers |
+| [`09_agents_analysis.md`](09_agents_analysis.md) | 9장 실험 요약: 파트별 결과와 핵심 관찰, 관련 논문 흐름 · Chapter 9 results summary |
 
 ## 실험 원칙 | How I Learn
 
