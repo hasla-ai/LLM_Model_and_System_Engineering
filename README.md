@@ -118,6 +118,8 @@ The book's Chapter 3 training assumes an 80GB RunPod GPU. Run as is, it far exce
 - **본 학습:** 735스텝을 1,772초(약 29.5분) 동안 학습
 - **loss:** 0.169(100스텝) → 0.059(600스텝), 전체 평균 0.076
 - **정답 토큰 정확도:** 97.0% → 98.2%
+- **평가 (03_02, 326건, 베이스 → 파인튜닝):** parse_ok 0.76 → 1.00, category_acc 0.07 → 0.94, count_acc 0.05 → 0.67, ROUGE-1 0.30 → 0.62. 책(0.96, 0.89, 0.64, 0.61)과 비슷하거나 조금 높습니다.
+- **평가 한계 (책의 평가 설계 문제):** 평가셋이 원래 순서의 뒤쪽 10%라서 326건 모두 '증권'입니다(데이터가 카테고리 순으로 정렬됨). 그래서 category_acc는 증권 기사에 대한 정확도일 뿐입니다. 또 이벤트가 2개인 기사가 67.48%라서, count_acc 0.67은 '항상 2개'라고 답하는 것과 같은 수준입니다.
 
 **Results (RTX 5060 Laptop 8GB, WSL2):** a dry run on the longest samples (6,885 tokens) peaked at 4.84GB at 8.9 s/step. Full training ran 735 steps in 1,772 s (about 29.5 minutes). Loss went from 0.169 at step 100 to 0.059 at step 600 (average 0.076), and answer-token accuracy went from 97.0% to 98.2%.
 
