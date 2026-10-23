@@ -60,6 +60,7 @@ The book sets up Chapter 2 on Google Colab and Chapter 3 onward on RunPod cloud 
 | GPU | Colab T4 (16GB) 등 · and others | NVIDIA GeForce RTX 5060 Laptop GPU (8GB, Blackwell sm_120) |
 | 패키지 설치 · Install | 노트북 셀의 `!pip install` | `uv sync` ([pyproject.toml](pyproject.toml), [uv.lock](uv.lock)) |
 | 3장 실행 OS · Chapter 3 OS | RunPod (Linux) | WSL2 Ubuntu (같은 로컬 GPU) · WSL2 Ubuntu on the same GPU |
+| 9장 LLM · Chapter 9 LLM | Colab + OpenAI API (gpt-4o, gpt-4o-mini) | OpenAI API 그대로, GPU 불필요 (Windows·WSL 모두 가능) · OpenAI API, no GPU |
 
 GPU 연산이 없는 코드(02_01·02_02의 순수 Python 구현, 02_03의 토크나이저)는 그대로 실행하고, 모델을 GPU에 올리는 코드는 02_04부터입니다. 3장은 WSL2 Ubuntu에서 실행합니다. 평가에 쓰는 vllm이 Linux에서만 동작하고, Windows용 PyTorch에는 FlashAttention이 없어 긴 시퀀스 학습에서 메모리가 크게 늘기 때문입니다([아래 참고](#wsl2-ubuntu에서-실행--running-on-wsl2-ubuntu)). 책의 예제가 8GB보다 큰 GPU 메모리를 전제로 하면, 로컬에 맞춰 조정한 내용을 이 README와 해당 코드에 기록합니다.
 
@@ -151,6 +152,9 @@ The current environment follows the book's Chapter 4 (VLM) versions, pinned to w
 | `pandas` | 3.0.6 | 미설치 (RunPod 기본 포함) | 데이터 불러오기와 평가 표 · Data loading and result tables |
 | `python-mecab-ko` · `rouge` | 1.3.7 · 1.0.1 | 3장 | 한국어 형태소 분석과 ROUGE 점수 · Korean morphemes and ROUGE |
 | `vllm` | 0.11.0 (Linux 전용) | 4장 (Qwen3-VL 지원) | 일괄 생성과 LoRA 서빙 · Batched generation |
+| `langchain` · `langchain-openai` · `langchain-community` | 1.2.14 · 1.1.12 · 0.4.1 | 9장 | 에이전트, 도구 호출, SQL 에이전트 (`langchain-classic` 1.0.8 포함) · Agents and tool calling |
+| `duckduckgo-search` · `ddgs` · `yfinance` | 7.5.1 · 9.16.0 · 1.7.0 | 9장 | 웹 검색과 주가 조회 도구 · Search and stock tools |
+| `tenacity` · `nest-asyncio` · `numexpr` · `sqlalchemy` · `python-dotenv` | lock 기준 | 9장 (`python-dotenv`는 추가) | 재시도, 비동기 실행, 계산, DB 연결, `.env`에서 API 키 읽기 · Retry, async, math, DB, `.env` loading |
 
 의존성을 추가할 때는 `pip install` 대신 `uv add 패키지==버전`을 사용합니다. 그러면 `pyproject.toml`과 `uv.lock`이 함께 갱신됩니다.
 
@@ -235,6 +239,26 @@ uv run python 03_01_sllm_summary_finetuning.py
 **Hugging Face 업로드:** 모델을 Hub에 올릴 때는 토큰을 코드에 쓰지 않고, 터미널에서 `uv run hf auth login`으로 한 번 로그인합니다. 토큰이 `HF_HOME`에 저장되어 코드에서 자동으로 쓰입니다. 이 저장소는 공개 저장소이므로 토큰이 커밋되면 그대로 노출됩니다. 토큰은 Write 권한으로 만듭니다.
 
 **Hugging Face uploads:** never put the token in code. Log in once with `uv run hf auth login`; the token is stored under `HF_HOME` and picked up automatically. This repository is public, so a committed token would be exposed. Create the token with write permission.
+
+### 9장 OpenAI API 키 | OpenAI API Key for Chapter 9
+
+9장은 책과 같이 OpenAI API(gpt-4o, gpt-4o-mini)를 쓰므로 GPU가 필요 없습니다. API 키는 코드에 쓰지 않고, 저장소 루트의 `.env` 파일에 둡니다. `.env`는 `.gitignore`에 들어 있어 커밋되지 않습니다. 저장소 폴더를 Windows와 WSL이 함께 쓰므로 한 파일로 양쪽에서 읽힙니다. API 호출에는 사용료가 들고, 에이전트는 질문 하나에 여러 번 호출합니다.
+
+Chapter 9 uses the OpenAI API like the book, so no GPU is needed. Keep the API key in a `.env` file at the repository root (gitignored), never in code. API calls are billed, and agents make several calls per question.
+
+```text
+# .env (저장소 루트, 커밋 금지)
+OPENAI_API_KEY=sk-...
+```
+
+```python
+import os, getpass
+from dotenv import load_dotenv
+
+load_dotenv()                                   # .env의 OPENAI_API_KEY를 환경 변수로 읽음
+if not os.environ.get("OPENAI_API_KEY"):        # 없으면 실행할 때 직접 입력 (화면에 안 보임)
+    os.environ["OPENAI_API_KEY"] = getpass.getpass("OpenAI API Key: ")
+```
 
 ## 저장소 구성 | Repository Contents
 

@@ -24,6 +24,19 @@ dependencies = [
     "trl==0.29.1",
     "vllm==0.11.0; sys_platform == 'linux'",
     "wandb",
+    "ddgs",
+    "duckduckgo-search==7.5.1",
+    "langchain==1.2.14",
+    "langchain-classic",
+    "langchain-community==0.4.1",
+    "langchain-openai==1.1.12",
+    "nest-asyncio",
+    "numexpr",
+    "pydantic",
+    "python-dotenv",
+    "sqlalchemy",
+    "tenacity",
+    "yfinance",
 ]
 
 [tool.uv.sources]
