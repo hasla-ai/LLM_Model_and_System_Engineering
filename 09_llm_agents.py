@@ -183,7 +183,23 @@ Thought:{agent_scratchpad}'''
     response = agent_executor.invoke({"input": user_query})
     print("\n[최종 답변]:\n", response["output"])
 
+    # [로그 저장] logs/09/09_01_20261023_171521.log
 
+    # [실행 결과] 2026-10-23 17:15, gpt-6-luna(요약 도구 gpt-5.6-luna), stop_sequence=False, 약 23초
+    # 도구 호출 3번 → Final Answer (형식 오류 없음, max_iterations 6 안에서 끝남, LLM 호출 4번 + 요약 1번)
+    #   ① get_financial_statement("005380.KS") → 시가총액 77.37조 원, 추정 PER 6.5031686 (yfinance 실제 값)
+    #   ② get_latest_news("현대자동차 최근 뉴스") → '디 올 뉴 투싼' 공개, 발리 전기버스 11대 공급 등
+    #   ③ summarize_text(모델이 먼저 줄여 쓴 글) → 3문장 요약
+    # 최종 답변: 시가총액 약 77.37조 원, PER 약 6.50배 ("기준일이 없으니 참고 지표로 보라"는 단서 포함) + 뉴스 2건 요약
+
+    # [분석]
+    # - stop 매개변수 없이도 프롬프트의 STOP 지시가 통했다. 매 턴이 "Action Input: …"에서 끝났고,
+    #   이어진 Observation은 모두 실제 도구 결과였다(가공되지 않은 PER 6.5031686이 증거). 모델이 지어낸 Observation 없음.
+    # - 모델이 매 턴 "Question: …"부터 다시 쓴다. ReAct 해석기는 Action/Action Input만 읽으므로 동작에는 영향 없음.
+    # - ③은 필요 없는 호출이었다. 모델이 검색 결과를 이미 요약한 글을 요약 도구에 넣었다.
+    #   도구 설명의 "요약할 때는 반드시 이 도구를 사용하세요"를 형식적으로 따른 것으로, 도구 설명이 행동을 크게 좌우한다.
+    # - 09_01_02의 검색 결과와 에이전트의 검색 결과가 다르다. DuckDuckGo 결과는 호출할 때마다 바뀐다.
+    # - temperature 기본값(1)이라, 같은 질문도 실행할 때마다 도구 순서와 문장이 달라질 수 있다.
 
 
 def part_09_02():
