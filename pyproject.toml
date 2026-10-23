@@ -33,7 +33,6 @@ dependencies = [
     "nest-asyncio",
     "numexpr",
     "pydantic",
-    "python-dotenv",
     "sqlalchemy",
     "tenacity",
     "yfinance",

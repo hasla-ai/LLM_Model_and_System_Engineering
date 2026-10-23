@@ -159,7 +159,7 @@ The current environment follows the book's Chapter 4 (VLM) versions, pinned to w
 | `vllm` | 0.11.0 (Linux 전용) | 4장 (Qwen3-VL 지원) | 일괄 생성과 LoRA 서빙 · Batched generation |
 | `langchain` · `langchain-openai` · `langchain-community` | 1.2.14 · 1.1.12 · 0.4.1 | 9장 | 에이전트, 도구 호출, SQL 에이전트 (`langchain-classic` 1.0.8 포함) · Agents and tool calling |
 | `duckduckgo-search` · `ddgs` · `yfinance` | 7.5.1 · 9.16.0 · 1.7.0 | 9장 | 웹 검색과 주가 조회 도구 · Search and stock tools |
-| `tenacity` · `nest-asyncio` · `numexpr` · `sqlalchemy` · `python-dotenv` | lock 기준 | 9장 (`python-dotenv`는 추가) | 재시도, 비동기 실행, 계산, DB 연결, `.env`에서 API 키 읽기 · Retry, async, math, DB, `.env` loading |
+| `tenacity` · `nest-asyncio` · `numexpr` · `sqlalchemy` | lock 기준 | 9장 | 재시도, 비동기 실행, 계산, DB 연결 · Retry, async, math, DB |
 
 의존성을 추가할 때는 `pip install` 대신 `uv add 패키지==버전`을 사용합니다. 그러면 `pyproject.toml`과 `uv.lock`이 함께 갱신됩니다.
 
@@ -248,23 +248,27 @@ uv run python 03_01_sllm_summary_finetuning.py
 
 ### 9장 OpenAI API 키 | OpenAI API Key for Chapter 9
 
-9장은 책과 같이 OpenAI API(gpt-4o, gpt-4o-mini)를 쓰므로 GPU가 필요 없습니다. API 키는 코드에 쓰지 않고, 저장소 루트의 `.env` 파일에 둡니다. `.env`는 `.gitignore`에 들어 있어 커밋되지 않습니다. 저장소 폴더를 Windows와 WSL이 함께 쓰므로 한 파일로 양쪽에서 읽힙니다. API 호출에는 사용료가 들고, 에이전트는 질문 하나에 여러 번 호출합니다.
+9장은 책과 같이 OpenAI API(gpt-4o, gpt-4o-mini)를 쓰므로 GPU가 필요 없습니다. API 키는 **코드나 파일에 저장하지 않고, 실행할 때 입력합니다.** API 호출에는 사용료가 들고, 에이전트는 질문 하나에 여러 번 호출합니다.
 
-Chapter 9 uses the OpenAI API like the book, so no GPU is needed. Keep the API key in a `.env` file at the repository root (gitignored), never in code. API calls are billed, and agents make several calls per question.
+Chapter 9 uses the OpenAI API like the book, so no GPU is needed. The API key is **never stored in code or files; it is entered at run time.** API calls are billed, and agents make several calls per question.
 
-```text
-# .env (저장소 루트, 커밋 금지)
-OPENAI_API_KEY=sk-...
+**방법 1: 셸에서 한 번 입력하고 여러 번 실행** (터미널을 닫으면 사라짐)
+```bash
+llm
+read -rs -p "OpenAI API Key: " OPENAI_API_KEY && export OPENAI_API_KEY && echo
+uv run python 09_01_react.py
 ```
+`read -s`는 입력한 키를 화면과 셸 기록(`~/.bash_history`)에 남기지 않습니다. `export OPENAI_API_KEY=sk-...`처럼 키를 명령줄에 직접 쓰면 셸 기록에 남으니 쓰지 않습니다.
 
+**방법 2: 코드에서 입력받기** (책의 `getpass` 셀과 같음, 방법 1로 이미 넣었으면 묻지 않음)
 ```python
 import os, getpass
-from dotenv import load_dotenv
 
-load_dotenv()                                   # .env의 OPENAI_API_KEY를 환경 변수로 읽음
 if not os.environ.get("OPENAI_API_KEY"):        # 없으면 실행할 때 직접 입력 (화면에 안 보임)
     os.environ["OPENAI_API_KEY"] = getpass.getpass("OpenAI API Key: ")
 ```
+
+`read -s` hides the key from the screen and shell history; never type `export OPENAI_API_KEY=sk-...` on the command line. In code, fall back to `getpass` when the variable is not set.
 
 ## 저장소 구성 | Repository Contents
 
