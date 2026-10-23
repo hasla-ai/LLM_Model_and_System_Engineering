@@ -129,6 +129,28 @@ The book's Chapter 3 training assumes an 80GB RunPod GPU. Run as is, it far exce
 
 **Results (RTX 5060 Laptop 8GB, WSL2):** a dry run on the longest samples (6,885 tokens) peaked at 4.84GB at 8.9 s/step. Full training ran 735 steps in 1,772 s (about 29.5 minutes). Loss went from 0.169 at step 100 to 0.059 at step 600 (average 0.076), and answer-token accuracy went from 97.0% to 98.2%.
 
+### 4장 VLM QLoRA (04_01) | Chapter 4 VLM QLoRA
+
+책의 4장은 A100 80GB에서 Qwen3-VL-4B를 bf16(약 9GB)으로 학습합니다. 8GB에서는 모델 자체가 들어가지 않아서, 가중치를 4비트로 압축하고 LoRA만 학습하는 **QLoRA**로 바꿨습니다.
+
+| 항목 · Item | 책 · Book | 이 저장소 · This repository | 이유 · Reason |
+| --- | --- | --- | --- |
+| 모델 로드 (04) | bf16, 약 9GB | 4비트 NF4(`BitsAndBytesConfig`, 이중 양자화) → 2.62GiB | 8GB VRAM에 들어가게 함 (QLoRA의 Q) |
+| 시각 토큰 (04) | `min_pixels=256*28*28` (약 196토큰) | `min_pixels=64*32*32` (약 64토큰) | `28*28`은 Qwen2.5-VL(패치 14) 기준. Qwen3-VL은 패치 16이라 토큰 하나가 32×32 픽셀이고, 원본 이미지는 60×80이라 크게 키울 필요가 없음 |
+| 배치 (09) | 배치 2, 누적 8 | 배치 1, 누적 16 | 유효 배치 16은 같음. 전체 길이 logits 메모리를 절반으로 |
+| 옵티마이저 (09) | `adamw_torch_fused` | `adamw_bnb_8bit` | LoRA 1.32억 개의 Adam 상태 1.06GB → 0.26GB |
+| 사전 시험 (09) | 없음 | `TEST_RUN`: 2스텝 | 본 학습 전에 메모리·시간 확인 |
+| 어텐션 (00·10) | - | `FLASH_ATTENTION` 고정 | L×L 행렬을 만드는 math 방식으로 넘어가지 않게 함 |
+
+**결과 (RTX 5060 Laptop 8GB, WSL2):**
+- **학습 파라미터:** 132,120,576개 (전체의 2.89%, LoRA r=64를 7개 모듈 × 36층에 적용)
+- **사전 시험:** 최대 GPU 메모리 4.38GB, 스텝당 11.3초 (예상 1.7시간)
+- **본 학습:** 552스텝(2에폭)을 6,324초(약 1시간 45분) 동안 학습, 초당 1.39샘플
+- **loss:** 0.291(10스텝) → 0.058(30스텝) → 약 0.02(540~550스텝), 전체 평균 0.0365
+- **정답 토큰 정확도:** 95.0% → 99.1% (학습 데이터 기준. 테스트셋 평가와 병합·업로드는 이후 진행)
+
+**Results:** QLoRA (4-bit NF4 base, 2.62GiB) with 64 visual tokens, batch 1 × accumulation 16, and 8-bit Adam trained 132M LoRA parameters (2.89%). The dry run peaked at 4.38GB at 11.3 s/step. Full training ran 552 steps (2 epochs) in 6,324 s (about 1 h 45 min). Loss fell from 0.291 to about 0.02 (average 0.0365), and answer-token accuracy rose from 95.0% to 99.1% on training data.
+
 ## 로컬 CUDA 설정 및 실행 | Local CUDA Setup
 
 이 프로젝트는 Python 3.12와 [uv](https://docs.astral.sh/uv/)를 사용하는 독립 프로젝트입니다. 실행용 가상환경은 Ubuntu의 `~/.venvs/llm_serve`에 만들어집니다(아래 `llm` 명령). 저장소 안의 `.venv`는 Windows VS Code의 자동 완성용으로만 씁니다. 직접 의존성은 [pyproject.toml](pyproject.toml)에, 재현 가능한 전체 의존성 버전은 [uv.lock](uv.lock)에 기록합니다. 소스 파일은 주제별 폴더로 옮기지 않고 저장소 루트에 둡니다.
