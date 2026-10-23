@@ -94,7 +94,9 @@ def part_09_01():
     def summarize_text(text: str) -> str:
         """검색된 긴 텍스트를 입력받아 핵심만 3줄로 요약합니다."""
         # summary_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-        summary_llm = ChatOpenAI(model="gpt-5.6-luna")   # 쓸 수 있는 가벼운 모델, temperature 미지원 → 기본값(1)
+        summary_llm = ChatOpenAI(model="gpt-5.6-luna")
+        # 쓸 수 있는 가벼운 모델, temperature 미지원 → 기본값(1)
+
         response = summary_llm.invoke(f"다음 뉴스 텍스트를 3문장 이내로 핵심만 요약해:\n{text}")
         return response.content
 
@@ -122,7 +124,9 @@ def part_09_01():
     ## 09_01_07
 
     # 5. ReAct 표준 프롬프트 (문자열 안의 줄은 들여쓰지 않는다: 들여쓰면 프롬프트에 공백이 들어감)
-    # (추가) "IMPORTANT: …" 한 줄: stop 매개변수를 못 쓰는 모델이라, Action Input 뒤에서 멈추라고 프롬프트로 지시
+    # (추가) "IMPORTANT: …" 한 줄:
+    # stop 매개변수를 못 쓰는 모델이라, Action Input 뒤에서 멈추라고 프롬프트로 지시
+
     template = '''Answer the following questions as best you can. You have access to the following tools:
 
 {tools}
@@ -147,6 +151,7 @@ Thought:{agent_scratchpad}'''
 
     react_prompt = PromptTemplate.from_template(template)
 
+
     ## 09_01_08
 
     # 6. 모델 및 에이전트 실행기 구성
@@ -155,16 +160,20 @@ Thought:{agent_scratchpad}'''
     llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1), 실행할 때마다 답이 조금씩 달라짐
 
     # agent = create_react_agent(llm, tools, react_prompt)
+
     agent = create_react_agent(llm, tools, react_prompt, stop_sequence=False)   # stop 미지원 모델: 자동 stop 끄기
+
 
     # ReAct는 LLM이 Action: …까지만 쓰고 멈춰야 합니다.
     # 그래야 코드가 도구를 실행해 진짜 결과를 Observation에 넣어 줍니다.
+
     # 멈추지 않으면 LLM이 Observation: …까지 스스로 지어내서(환각) 도구를 실행하지 않은 채 답을 꾸밀 수 있습니다.
     # 그런데 gpt-6-luna는 이 stop 매개변수를 받지 않는 모델입니다. 추론형 모델 중에 이런 모델이 있습니다.
 
 
     # agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True,
     #                                handle_parsing_errors=True)
+
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True,
                                    handle_parsing_errors=True,
                                    max_iterations=6)   # 형식이 깨져 반복해도 API 호출은 6번에서 멈춤 (기본 15)
@@ -173,6 +182,9 @@ Thought:{agent_scratchpad}'''
     user_query = "한국 주식 현대차(005380.KS)의 실제 재무 정보와, 최근 현대자동차 관련 뉴스를 검색해서 요약해줘."
     response = agent_executor.invoke({"input": user_query})
     print("\n[최종 답변]:\n", response["output"])
+
+
+
 
 def part_09_02():
     '''
@@ -704,7 +716,42 @@ def part_09_04():
 
 PARTS = {"09_01": part_09_01, "09_02": part_09_02, "09_03": part_09_03, "09_04": part_09_04}
 
+
+## 09_99 실행 로그: 파트마다 화면 출력 전체를 logs/09/<파트>_<시각>.log에도 저장 (분석용, .gitignore)
+
+import re, datetime, contextlib, traceback
+
+class _Tee:
+    """화면과 로그 파일에 동시에 쓴다. 파일에는 verbose 출력의 색상 코드(ANSI)를 지워서 저장한다."""
+    _ansi = re.compile(r"\x1b\[[0-9;]*m")
+
+    def __init__(self, stream, file):
+        self.stream, self.file = stream, file
+
+    def write(self, s):
+        self.stream.write(s)
+        self.file.write(self._ansi.sub("", s))
+        return len(s)
+
+    def flush(self):
+        self.stream.flush()
+        self.file.flush()
+
+
 if __name__ == "__main__":
+    # for name in (sys.argv[1:] or PARTS):
+    #     print(f"\n{'=' * 20} {name} {'=' * 20}")
+    #     PARTS[name]()
+    os.makedirs("logs/09", exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     for name in (sys.argv[1:] or PARTS):
-        print(f"\n{'=' * 20} {name} {'=' * 20}")
-        PARTS[name]()
+        path = f"logs/09/{name}_{stamp}.log"
+        with open(path, "w", encoding="utf-8") as log, \
+             contextlib.redirect_stdout(_Tee(sys.stdout, log)), \
+             contextlib.redirect_stderr(_Tee(sys.stderr, log)):
+            print(f"\n{'=' * 20} {name} ({stamp}) {'=' * 20}")
+            try:
+                PARTS[name]()
+            except Exception:
+                traceback.print_exc()   # 오류도 로그에 남기고 다음 파트로 넘어감
+        print(f"[로그 저장] {path}")
