@@ -131,7 +131,6 @@ Thought:{agent_scratchpad}'''
     # 6. 모델 및 에이전트 실행기 구성
 
     # llm = ChatOpenAI(model="gpt-4o", temperature=0)
-    # llm = ChatOpenAI(model="gpt-4o", temperature=0)
     llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
 
     agent = create_react_agent(llm, tools, react_prompt)
@@ -282,6 +281,7 @@ def part_09_02():
 
     # 3. 모델 및 에이전트 설정
 
+    # llm = ChatOpenAI(model="gpt-4o", temperature=0)
     llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
     agent = create_openai_functions_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
