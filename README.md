@@ -131,27 +131,37 @@ This is a standalone project using Python 3.12 and [uv](https://docs.astral.sh/u
 
 | 패키지 · Package | 버전 · Version | 책 기준 · Book | 용도 · Purpose |
 | --- | --- | --- | --- |
-| `torch` · `torchaudio` · `torchvision` | 2.8.0 · 2.8.0 · 0.23.0 (CUDA 12.8) | 3장과 같음 (2장은 Colab 기본값) | GPU 텐서 연산 · GPU tensor backend |
-| `transformers` | 4.55.2 | 2장 4.55.0, 3장 4.53.0 | 토크나이저·모델 로드·추론·학습 · Tokenizers, models, inference, training |
-| `accelerate` | 1.8.1 | 같음 | 모델을 장치에 올리기와 학습 실행 · Device placement and training |
-| `bitsandbytes` | 0.46.0 | 같음 | 8비트·4비트 양자화 로드 · 8-bit and 4-bit quantized loading |
-| `trl` | 0.19.0 | 같음 | `SFTTrainer`로 지도 미세조정 · Supervised fine-tuning |
-| `peft` | 0.10.0 | 같음 | LoRA 어댑터 적용·병합 · LoRA adapters |
-| `datasets` | 5.0.1 | 버전 미지정 | 학습 데이터셋 구성과 토큰화 · Dataset building |
-| `hf-transfer` | 0.1.9 | 버전 미지정 | Hugging Face 고속 다운로드, `HF_HUB_ENABLE_HF_TRANSFER=1`일 때만 사용 · Faster Hub downloads when `HF_HUB_ENABLE_HF_TRANSFER=1` |
-| `pandas` | 3.0.6 | 미설치 (RunPod 기본 포함) | 뉴스 데이터 불러오기와 평가 표 · Data loading and result tables |
-| `python-mecab-ko` | 1.3.7 | 버전 미지정 | 한국어 형태소 분석 (ROUGE 계산용) · Korean morphological analysis |
-| `rouge` | 1.0.1 | 버전 미지정 | ROUGE-1/2/L 점수 · ROUGE scores |
-| `vllm` | 0.10.2 (Linux 전용) | 같음 | 평가셋 일괄 생성과 LoRA 서빙 · Batched generation with LoRA |
+현재 환경은 **책 4장(VLM) 버전**을 기준으로 합니다. 4장에서 실행한 버전(책 출력 기준)을 그대로 고정했습니다.
+
+The current environment follows the book's Chapter 4 (VLM) versions, pinned to what the book's notebooks actually ran.
+
+| 패키지 · Package | 버전 · Version | 책 기준 · Book | 용도 · Purpose |
+| --- | --- | --- | --- |
+| `torch` · `torchaudio` · `torchvision` | 2.8.0 · 2.8.0 · 0.23.0 (CUDA 12.8) | 3·4장과 같음 (2장은 Colab 기본값) | GPU 텐서 연산 · GPU tensor backend |
+| `transformers` | 4.57.6 | 4장 (≥4.57, Qwen3-VL 지원) | 토크나이저·모델 로드·추론·학습 · Tokenizers, models, inference, training |
+| `accelerate` | 1.14.0 | 4장 | 모델을 장치에 올리기와 학습 실행 · Device placement and training |
+| `trl` | 0.29.1 | 4장 | `SFTTrainer`로 지도 미세조정 · Supervised fine-tuning |
+| `peft` | 0.19.1 | 4장 | LoRA 어댑터 적용·병합 · LoRA adapters |
+| `datasets` | 3.6.0 | 4장 (<4) | 데이터셋 구성 · Dataset building |
+| `qwen-vl-utils` | 0.0.14 | 4장 | 이미지·영상 입력 전처리 · Vision input preprocessing |
+| `evaluate` · `scikit-learn` | 0.4.6 · 1.9.1 | 4장 | 평가 지표 · Metrics |
+| `pillow` · `tensorboard` · `wandb` · `rich` | 13.0.0 · 2.21.0 · 0.31.0 · 15.0.0 | 4장 | 이미지 처리, 학습 기록, 출력 · Images, logging, console output |
+| `bitsandbytes` | 0.46.0 | 2장 | 8비트·4비트 양자화 로드 (4장 QLoRA에도 사용) · Quantized loading |
+| `hf-transfer` | 0.1.9 | 버전 미지정 | Hugging Face 고속 다운로드, `HF_HUB_ENABLE_HF_TRANSFER=1`일 때만 사용 · Faster Hub downloads |
+| `pandas` | 3.0.6 | 미설치 (RunPod 기본 포함) | 데이터 불러오기와 평가 표 · Data loading and result tables |
+| `python-mecab-ko` · `rouge` | 1.3.7 · 1.0.1 | 3장 | 한국어 형태소 분석과 ROUGE 점수 · Korean morphemes and ROUGE |
+| `vllm` | 0.11.0 (Linux 전용) | 4장 (Qwen3-VL 지원) | 일괄 생성과 LoRA 서빙 · Batched generation |
 
 의존성을 추가할 때는 `pip install` 대신 `uv add 패키지==버전`을 사용합니다. 그러면 `pyproject.toml`과 `uv.lock`이 함께 갱신됩니다.
 
 **버전을 이렇게 맞춘 이유**
-- **torch 2.8.0 (CUDA 12.8):** 책 3장이 지정한 버전이고, vllm 0.10.2가 torch·torchaudio·torchvision 버전을 정확히 요구합니다. CUDA 12.8 빌드라서 RTX 50 시리즈(Blackwell, CUDA 12.8 이상 필요)와 `bitsandbytes 0.46.0`(CUDA 12.8까지 지원)의 조건도 함께 만족합니다. 2장은 torch 버전을 지정하지 않으므로 같은 버전을 씁니다. PyTorch는 PyPI가 아니라 [CUDA 12.8용 저장소](https://download.pytorch.org/whl/cu128)에서 받습니다.
-- **transformers 4.55.2:** 책은 2장에서 4.55.0, 3장 학습에서 4.53.0을 쓰지만, vllm 0.10.2는 4.55.2 이상을 요구합니다. 한 환경에서 모든 장을 실행하기 위해 vllm 조건을 만족하는 가장 낮은 버전으로 통일했습니다. 2장과는 버그 수정(패치) 차이뿐이고, `trl 0.19.0`도 4.51 이상이면 동작합니다.
-- **Python 3.12:** vllm 0.10.2가 Python 3.14를 지원하지 않고, 책의 RunPod 환경도 Python 3.12입니다.
+- **장마다 책 버전이 다릅니다.** 2장은 transformers 4.55.0, 3장은 4.53.0과 trl 0.19.0·peft 0.10.0·vllm 0.10.2, 4장은 transformers 4.57 이상과 trl 0.29.1·peft 0.19.1·vllm 0.11.0을 씁니다. 한 환경에 모두 넣을 수 없어서, 가장 최근 장(4장) 버전으로 올렸습니다.
+- **2·3장 결과는 이전 환경에서 실행한 것입니다.** 커밋 `71884ef` 기준으로 transformers 4.55.2, accelerate 1.8.1, trl 0.19.0, peft 0.10.0, datasets 5.0.1, vllm 0.10.2입니다. 그대로 다시 실행하려면 `git checkout 71884ef -- pyproject.toml uv.lock` 후 `uv sync --locked`를 실행합니다.
+- **torch 2.8.0 (CUDA 12.8):** 책 3·4장이 지정한 버전이고, vllm 0.10.2와 0.11.0 모두 이 버전을 정확히 요구합니다. CUDA 12.8 빌드라서 RTX 50 시리즈(Blackwell, CUDA 12.8 이상 필요)와 `bitsandbytes 0.46.0`(CUDA 12.8까지 지원) 조건도 만족합니다. PyTorch는 PyPI가 아니라 [CUDA 12.8용 저장소](https://download.pytorch.org/whl/cu128)에서 받습니다.
+- **Python 3.12:** vllm이 Python 3.14를 지원하지 않고, 책의 RunPod 환경도 Python 3.12입니다.
+- **Windows 주의:** peft 0.19는 내부에서 scikit-learn을 불러오는데, Windows의 애플리케이션 제어 정책이 scikit-learn의 DLL을 막을 수 있습니다. 3·4장은 WSL2 Ubuntu에서 실행합니다.
 
-Add dependencies with `uv add package==version` instead of `pip install` so both `pyproject.toml` and `uv.lock` are updated. torch 2.8.0 (CUDA 12.8) is the version the book uses in Chapter 3 and the exact version vLLM 0.10.2 requires; as a CUDA 12.8 build it also supports RTX 50-series GPUs and `bitsandbytes 0.46.0`. The book pins transformers 4.55.0 (Chapter 2) and 4.53.0 (Chapter 3 training), but vLLM 0.10.2 needs 4.55.2 or later, so every chapter uses 4.55.2. Python is limited to 3.12 because vLLM 0.10.2 does not support 3.14 and the book's RunPod image uses 3.12.
+Add dependencies with `uv add package==version` instead of `pip install`. Each chapter of the book pins different versions (Chapter 3: transformers 4.53.0, trl 0.19.0, peft 0.10.0, vLLM 0.10.2; Chapter 4: transformers ≥4.57, trl 0.29.1, peft 0.19.1, vLLM 0.11.0), so the environment follows the latest chapter. Chapter 2 and 3 results were produced with the environment at commit `71884ef`; restore it with `git checkout 71884ef -- pyproject.toml uv.lock` and `uv sync --locked`. torch 2.8.0 (CUDA 12.8) is what both vLLM versions require and supports RTX 50-series GPUs and `bitsandbytes 0.46.0`. Python is limited to 3.12. On Windows, peft 0.19 imports scikit-learn, whose DLL may be blocked by Application Control, so Chapters 3 and 4 run in WSL2 Ubuntu.
 
 ```powershell
 # 저장소 폴더에서 실행
@@ -167,9 +177,9 @@ uv run python .\02_03_llm_chat_template.py
 uv run python .\02_04_llm_inference.py
 ```
 
-**02_03:** 처음 실행할 때 `openai/gpt-oss-20b` 토크나이저 파일을 Hugging Face에서 내려받으므로 인터넷 연결이 필요합니다. 모델 가중치는 내려받지 않습니다. 정상 실행 여부는 Transformers 버전이 `4.55.2`인지, 토큰 ID를 디코딩한 문장이 원문과 같은지, 채팅 템플릿이 어시스턴트 생성 위치까지 출력하는지, 마지막 결과가 PyTorch 텐서인지 확인하면 됩니다.
+**02_03:** 처음 실행할 때 `openai/gpt-oss-20b` 토크나이저 파일을 Hugging Face에서 내려받으므로 인터넷 연결이 필요합니다. 모델 가중치는 내려받지 않습니다. 정상 실행 여부는 Transformers 버전(2장 실행 당시 `4.55.2`), 토큰 ID를 디코딩한 문장이 원문과 같은지, 채팅 템플릿이 어시스턴트 생성 위치까지 출력하는지, 마지막 결과가 PyTorch 텐서인지 확인하면 됩니다.
 
-**02_03:** On first run, the script downloads tokenizer files for `openai/gpt-oss-20b` from Hugging Face, so an internet connection is required. It does not download model weights. To check the setup, confirm Transformers reports version `4.55.2`, decoding the token IDs reproduces the original text, the chat template ends at the assistant generation point, and the final output is a PyTorch tensor.
+**02_03:** On first run, the script downloads tokenizer files for `openai/gpt-oss-20b` from Hugging Face, so an internet connection is required. It does not download model weights. To check the setup, confirm the Transformers version (`4.55.2` when Chapter 2 was run), decoding the token IDs reproduces the original text, the chat template ends at the assistant generation point, and the final output is a PyTorch tensor.
 
 **02_04:** 처음 실행할 때 `Qwen/Qwen3-4B-Instruct-2507` 가중치(약 8GB)를 내려받습니다. 4비트로 불러오면 GPU 메모리를 약 2.5GB 사용합니다. 모든 파라미터가 `cuda:0`에 있고 `Linear4bit` 층이 252개이면 정상입니다.
 

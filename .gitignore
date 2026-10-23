@@ -10,3 +10,5 @@ qwen3-merged/
 base_eval.csv
 lora_eval.csv
 comparison.csv
+output_dir_qwen3_vl_4b_instruct_lora/
+merged/
