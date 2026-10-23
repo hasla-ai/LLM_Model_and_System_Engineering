@@ -203,18 +203,22 @@ Thought:{agent_scratchpad}'''
 
 def part_09_02():
     '''
-    펑션 콜링: LLM이 도구 호출을 JSON(함수 이름 + 인자)으로 제안하고, 실제 실행은 코드가 한다
+    펑션 콜링 4STEP: LLM이 도구 호출을 JSON(함수 이름 + 인자)으로 제안하고, 실제 실행은 코드가 한다
     09_02_01 함수 스키마 / 09_02_02 bind_tools / 09_02_03 FC + ReAct (멀티턴 메모리) / 09_02_04 병렬 도구 제안
     '''
 
     ## 09_02_01 함수 스키마.
+
     # LLM에게 전달되는 도구 설명서의 실제 모양
 
     weather_schema = {
         "type": "function",
         "function": {
-            "name": "get_weather",
+            "name": "get_weather", # 도구 이름 (get_weather)
+
             "description": "특정 지역의 현재 날씨를 조회합니다.",
+            # description	언제 쓰는 도구인지. LLM이 판단할 때 가장 크게 의존하는 부분
+            
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -222,15 +226,19 @@ def part_09_02():
                 },
                 "required": ["location"]
             }
+            # 인자의 형식(JSON Schema). properties는 인자 목록과 각 설명, required는 꼭 넣어야 하는 인자
         }
     }
     # 노트북은 셀의 마지막 값을 화면에 보여 주지만 .py는 그렇지 않으므로 변수에 담아 출력
     print(weather_schema)
 
+
+
     ## 09_02_02 bind_tools
 
     # 날씨 도구(Open-Meteo)를 붙이면 LLM이 {'location': 'Seoul'}처럼 인자까지 뽑아서 제안함.
-    # "서울"을 영문으로 바꿔 넣는 것은 도구 설명(docstring)을 보고 판단한 결과.
+    # 질문 ──► LLM + 스키마 ──► tool_calls: get_weather({'location': 'Seoul'})
+    # Open-Meteo API ──► "Seoul의 현재 기온은 …도", "'서울'은 'Seoul'처럼 영문으로" 안내도 그대로 LLM에게 전달
 
     import requests
     import warnings
@@ -239,14 +247,19 @@ def part_09_02():
     from langchain_openai import ChatOpenAI
     from langchain_core.tools import tool
 
+
     # 1. 실제 날씨 API 도구 정의 (Open-Meteo 사용)
 
-    @tool
+    @tool # 함수를 LangChain 도구로 바꿉니다.
 
     def get_weather(location: str) -> str:
+
         """특정 지역의 현재 날씨와 기온을 조회합니다.
-        location: 조회할 도시 이름. (주의: API 검색을 위해 '서울'은 'Seoul'처럼 반드시 영문으로 번역해서 입력하세요)
+        location: 조회할 도시 이름.
+        (주의: API 검색을 위해 '서울'은 'Seoul'처럼 반드시 영문으로 번역해서 입력하세요)
         """
+        # description	언제 쓰는 도구인지. LLM이 판단할 때 가장 크게 의존하는 부분
+
         try:
             # Step 1: 도시 이름을 위도 경도로 변환 (Geocoding API)
 
@@ -269,21 +282,47 @@ def part_09_02():
         except Exception as e:
             return f"날씨 정보를 불러오는 중 에러가 발생했습니다: {e}"
 
+
     # 2. 모델 초기화 및 도구 바인딩
 
     # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
     llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
 
+
+    # 질문 ──► LLM + 스키마 ──► tool_calls: get_weather({'location': 'Seoul'}) (코드가 실행)
+
+    # Open-Meteo API ──► "Seoul의 현재 기온은 …도"
+    # ※ 이 결과를 LLM에게 다시 보내지는 않음
     # bind_tools로 모델에게 "필요하면 이 도구를 써도 좋아"라고 JSON 스키마를 전달
 
+    # 도구 내부 (251~271줄): 날씨 API를 두 번 호출합니다.
+    # 도시 이름을 위도·경도로 바꾼 뒤(Geocoding), 그 좌표의 현재 기온과 풍속을 조회합니다(Forecast).
+    # 오류가 나도 예외를 던지지 않고 문장으로 돌려줍니다.
+
+    # 펑션 콜링의 절반(제안 → 실행)만 보여 주는 단계이고,
+    # 나머지 절반(결과 전달 → 답변)은 다음 단계에서 AgentExecutor
+
+
     llm_with_tools = llm.bind_tools([get_weather])
+
+    # 이후 매 호출에 위 스키마를 함께 보내는 새 모델 객체를 만듭니다. 도구를 실행하지는 않습니다.
+
+
 
     # 3. 모델 호출
 
     user_query = "지금 서울 날씨 어때? 덥진 않아?"
     response = llm_with_tools.invoke(user_query)
 
+    # bind_tools(tools) + invoke (446~452줄): API를 한 번만 호출.
+    # 응답의 tool_calls에 호출 제안이 세 개 함께.
+
+    # 병렬 도구 호출 제안.
+
+
     # 4. Function Calling 결과 파싱 및 실행
+
     # 모델이 일반 텍스트 대신 함수 호출(tool_calls)을 제안했는지 확인
 
     if response.tool_calls:
@@ -297,6 +336,9 @@ def part_09_02():
         # 5. 애플리케이션 단에서 실제 파이썬 함수를 실행
 
         result = get_weather.invoke(args)
+
+        # 직접 실행하고 결과를 출력
+
         print(f"[실측 데이터 결과]\n{result}")
 
     else:
@@ -304,7 +346,7 @@ def part_09_02():
 
 
     ## 09_02_03 펑션 콜링에 추론 교차를 얹기.
-
+    
     # 인자가 2개인 도구는 pydantic 스키마로 설명(StructuredTool).
     # chat_history(이전 대화)와 agent_scratchpad(이번 질문의 도구 호출 과정)를 나눠서 멀티턴 대화를 기억함.
     
@@ -320,9 +362,14 @@ def part_09_02():
 
     def get_stock_history(symbol: str, period: str):
         # 실제 환경에서는 DB나 API에서 기간별 데이터를 가져오는 로직이 들어갑니다.
+        # 고정 문자열 돌려주는 가짜 도구(1): 데이터가 아니라 "도구를 연달아 고르는 흐름"을 보려는 예시
+        # 인자가 2개라서 StructuredTool + pydantic 스키마(StockHistoryInput)로 인자마다 설명.
+                
         return f"{symbol}의 {period} 동안 주가는 96,500원에서 190,000원으로 96.9% 상승했습니다."
 
     def get_financial_news(symbol: str):
+        # 고정 문자열 돌려주는 가짜 도구(2): 데이터가 아니라 "도구를 연달아 고르는 흐름"을 보려는 예시
+
         return f"{symbol} 관련 뉴스: 차세대 AI 메모리 HBM4의 양산 소식과 가격 인상 협상에 따른 수익성 개선 기대감 고조."
 
     # 인자가 2개인 도구는 pydantic 스키마로 각 인자의 이름·설명을 알려줌.
@@ -338,6 +385,7 @@ def part_09_02():
             func=get_stock_history,
             description="특정 종목(symbol)의 주어진 기간(period) 동안 주가 이력을 조회합니다.",
             args_schema=StockHistoryInput
+            # 이번 질문 안에서 지금까지 한 함수 호출과 결과 (멀티스텝 기억)
         ),
         Tool(name="get_financial_news", func=get_financial_news,
              description="특정 종목의 최신 금융 뉴스를 가져옵니다.")
@@ -347,9 +395,18 @@ def part_09_02():
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "너는 금융 데이터를 분석하는 전문 에이전트야. 도구를 사용하여 정확한 정보를 제공해."),
-        MessagesPlaceholder(variable_name="chat_history"),      # 이전 턴들의 대화 (멀티턴)
+
+        # 역할 지시
+
+        MessagesPlaceholder(variable_name="chat_history"),
+        # 이전 턴들의 대화 (멀티턴)
+
         ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),  # 이번 턴의 도구 호출 과정 (멀티스텝)
+
+        # 이번 질문
+
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+        # 이번 턴의 도구 호출 과정(멀티스텝)_ 이번 질문 안에서 지금까지 한 함수 호출과 결과
     ])
 
     # 3. 모델 및 에이전트 설정
@@ -359,18 +416,32 @@ def part_09_02():
     llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
 
     agent = create_openai_functions_agent(llm, tools, prompt)
+    # 프롬프트, 도구가 붙은 모델, 응답 해석기를 하나로.
+    # create_openai_functions_agent는 내부에서 llm.bind(functions=[…])를 씀.
+    # 이것은 OpenAI의 **옛 함수 호출 매개변수(functions)**이고, 지금은 tools로 대체
+    # 그 경우 tools 방식을 쓰는 create_openai_tools_agent
+
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+    # AgentExecutor가 위 그림의 루프를 돌림.
+
 
     # 4. 세션별 메모리 관리 (멀티턴의 핵심)
 
     demo_chat_history = ChatMessageHistory()
 
     conversational_agent_executor = RunnableWithMessageHistory(
+        # 실행할 때마다 session_id로 대화 기록을 찾아 chat_history에 넣고, 끝나면 질문과 답을 기록에 추가
+
         agent_executor,
         lambda session_id: demo_chat_history,
+        # lambda session_id: demo_chat_history는 세션 ID와 관계없이 항상 같은 기록을 돌려줌.
+        # 진짜로 세션을 나누려면 ID별로 기록을 따로 둬야.
+
         input_messages_key="input",
         history_messages_key="chat_history",
     )
+    # 질문을 한 번만 하므로 기억 기능이 실제로 쓰이지는 않음.
+
 
     # 5. 실행 (연쇄 사고 테스트)
 
@@ -382,11 +453,11 @@ def part_09_02():
     print(response["output"])
 
 
+
     ## 09_02_04 여러 도구를 한 번에 병렬 제안
 
-    # 질문 하나에 주가·환율·재무 도구 호출을 한 번에 여러 개 제안받아 차례로 실행    
-
     import yfinance as yf
+    # 질문 하나에 주가·환율·재무 도구 호출을 한 번에 여러 개 제안받아 차례로 실행    
 
 
     # 1. 실제 금융 데이터 API 도구 (Yahoo Finance 연동)
@@ -440,9 +511,14 @@ def part_09_02():
     # 2. 모델 초기화 및 도구 바인딩
 
     # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
     llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
+
     tools = [get_stock_price, get_exchange_rate, summarize_financials]
+
     llm_with_tools = llm.bind_tools(tools)
+
+
 
 
     # 3. 에이전트 실행 로직 (한 번의 응답에 tool_calls가 여러 개 들어올 수 있음)
@@ -615,6 +691,8 @@ def part_09_03():
     # 도구가 예외를 던지는 대신 "무엇이 틀렸는지" 문장을 돌려주면, 그 문장이 에이전트의 Observation이 되어
     # LLM이 인자를 고쳐서 다시 호출한다 (09_03_04의 except 블록이 이 역할).
 
+    # 결과를 LLM에게 돌려보내지 않으므로, 질문의 "요약해줘"에 대한 LLM의 요약은 나오지 않고 도구 결과 세 줄만 출    
+
 
     ## 09_03_04 세 가지 기법의 통합 (검증 + 재시도 + 오류 메시지 반환)
 
@@ -770,3 +848,11 @@ if __name__ == "__main__":
             except Exception:
                 traceback.print_exc()   # 오류도 로그에 남기고 다음 파트로 넘어감
         print(f"[로그 저장] {path}")
+
+
+# 세 단계 비교
+# 단계	누가 도구를 고르나	누가 실행하나	결과를 LLM에 다시 보내나	LLM 호출 수
+# 09_02_02	LLM (1개)	코드	❌	1
+# 09_02_03	LLM (필요한 만큼 반복)	AgentExecutor	✅ 루프	3 이상
+# 09_02_04	LLM (3개를 한 번에)	코드 (차례로)	❌	1
+# 실행하면 로그에서 이 표의 내용이 맞는지 하나씩 확인해 보겠습니다. 특히 09_02_03이 옛 functions 매개변수로 통과하는지가 첫 번째 관찰 포인트입니다.
