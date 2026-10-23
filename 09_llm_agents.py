@@ -6,6 +6,7 @@
   09_03 예외 처리·병렬 실행  
   09_04 Text-to-SQL         
 
+  개별 실행
   '''
 
 import os, sys, getpass, asyncio
@@ -33,6 +34,19 @@ def part_09_01():
 
     검색 도구: DuckDuckGoSearchRun()
     시가총액, PER 조회 등 금융 데이터 API : Yahoo Finance
+
+    (실행) Ubuntu, 한 줄 씩 실행
+     read -rs -p "OpenAI API Key: " OPENAI_API_KEY && export OPENAI_API_KEY && echo   # 이 줄만 실행하고 키를 붙여 넣기
+
+    echo ${#OPENAI_API_KEY}     # 키 값은 보이지 않고 길이만 출력. 0이거나 몇 글자뿐이면 붙여 넣기가 안 된 것
+
+    curl -s -o /dev/null -w "%{http_code}\n" https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"
+    
+    # 200: 키가 정상.
+    # 401: 키가 삭제·폐기됐거나 잘못 복사된 것.
+    # 429 insufficient_quota: 키는 정상인데 크레딧이 없거나 결제 설정 잘못된 경우.
+
+    uv run python 09_llm_agents.py 09_01
     '''
 
     ## 09_01_02
@@ -41,6 +55,9 @@ def part_09_01():
 
     search = DuckDuckGoSearchRun()
     print(search.invoke("현대자동차 최근 뉴스"))
+
+# ==================== 09_01 ====================
+# 현대자동차그룹의 최신 뉴스와 공식 보도자료를 가장 빠르게 전달합니다. 지속가능한 미래를 위한 기술 혁신과 주요 소식을 확인하세요. Hyundai의 최신 뉴스와 차량 관련 업데이트를 한곳에서 확인하세요. 신차 출시, 기술 동향, 브랜드 소식을 빠르고 정확하게 전달합니다. 현대차가 6년 만에 선보이는 5세대 완전변경 모델 '디 올 뉴 투싼'을 공개했다. 디자인 언어 '아트 오브 스틸'을 바탕으로 강인한 외관을 완성했으며 전장·전폭·휠베이스를 확대해 동급 최고 수준의 공간성을 확보했다. 파워트레인은 1.6 터보 가솔린 (최고 출력 193PS)과 차세대 하이브리드 시스템 (시스템 최고 출력 245PS·복합연비 17.4km/ℓ) 두 가지로 운영된다. 현대차 SUV 최초로 플레오스 커넥트를 탑재해 생성형 AI 에이전트 '글레오 AI'와 '플레오스 앱마켓' 기반의 디지털 경험을 제공한다. Hyundai 제품 최신 뉴스와 소유자에게 실용적인 공지사항을 안내하는 페이지입니다. 필요한 정보를 쉽게 찾아보세요. 현대자동차가 인도네시아 발리에 전기버스를 공급하며 아시아·태평양 지역 친환경 상용차 시장 공략에 속도를 낸다. 현대차는 22일 (현지시간) 인도네시아 발리 독립기념탑에서 열린 '전기버스 및 충전 인프라 보급 프로젝트 출범식'에서 카운티 일렉트릭 전기버스 11대를 발리 주정부에 공급했다고 23일 밝혔다. 이날 행사에는 김영신 현대차...
 
     ## 09_01_03
 
@@ -76,7 +93,8 @@ def part_09_01():
     # 3. 텍스트 요약 도구 (LLM을 도구 안에서 다시 호출)
     def summarize_text(text: str) -> str:
         """검색된 긴 텍스트를 입력받아 핵심만 3줄로 요약합니다."""
-        summary_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        # summary_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        summary_llm = ChatOpenAI(model="gpt-5.6-luna")   # 쓸 수 있는 가벼운 모델, temperature 미지원 → 기본값(1)
         response = summary_llm.invoke(f"다음 뉴스 텍스트를 3문장 이내로 핵심만 요약해:\n{text}")
         return response.content
 
@@ -104,6 +122,7 @@ def part_09_01():
     ## 09_01_07
 
     # 5. ReAct 표준 프롬프트 (문자열 안의 줄은 들여쓰지 않는다: 들여쓰면 프롬프트에 공백이 들어감)
+    # (추가) "IMPORTANT: …" 한 줄: stop 매개변수를 못 쓰는 모델이라, Action Input 뒤에서 멈추라고 프롬프트로 지시
     template = '''Answer the following questions as best you can. You have access to the following tools:
 
 {tools}
@@ -119,6 +138,8 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer in KOREAN to the original input question
 
+IMPORTANT: After writing "Action Input: ...", STOP immediately. Never write the Observation yourself.
+
 Begin!
 
 Question: {input}
@@ -131,13 +152,22 @@ Thought:{agent_scratchpad}'''
     # 6. 모델 및 에이전트 실행기 구성
 
     # llm = ChatOpenAI(model="gpt-4o", temperature=0)
-    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1), 실행할 때마다 답이 조금씩 달라짐
 
-    agent = create_react_agent(llm, tools, react_prompt)
+    # agent = create_react_agent(llm, tools, react_prompt)
+    agent = create_react_agent(llm, tools, react_prompt, stop_sequence=False)   # stop 미지원 모델: 자동 stop 끄기
+
+    # ReAct는 LLM이 Action: …까지만 쓰고 멈춰야 합니다.
+    # 그래야 코드가 도구를 실행해 진짜 결과를 Observation에 넣어 줍니다.
+    # 멈추지 않으면 LLM이 Observation: …까지 스스로 지어내서(환각) 도구를 실행하지 않은 채 답을 꾸밀 수 있습니다.
+    # 그런데 gpt-6-luna는 이 stop 매개변수를 받지 않는 모델입니다. 추론형 모델 중에 이런 모델이 있습니다.
 
 
+    # agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True,
+    #                                handle_parsing_errors=True)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True,
-                                   handle_parsing_errors=True)
+                                   handle_parsing_errors=True,
+                                   max_iterations=6)   # 형식이 깨져 반복해도 API 호출은 6번에서 멈춤 (기본 15)
 
     # 7. 실행
     user_query = "한국 주식 현대차(005380.KS)의 실제 재무 정보와, 최근 현대자동차 관련 뉴스를 검색해서 요약해줘."
@@ -668,7 +698,7 @@ def part_09_03():
 
 def part_09_04():
     ## 09_04_01 Text-to-SQL (작성 예정, hospital.db는 실행할 때 새로 만들어지므로 .gitignore)
-    
+
     print("09_04: 아직 작성 전")
 
 
