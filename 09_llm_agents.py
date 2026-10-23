@@ -183,7 +183,9 @@ Thought:{agent_scratchpad}'''
                                    handle_parsing_errors=True,
                                    max_iterations=6)   # 형식이 깨져 반복해도 API 호출은 6번에서 멈춤 (기본 15)
 
+
     # 7. 실행
+
     user_query = "한국 주식 현대차(005380.KS)의 실제 재무 정보와, 최근 현대자동차 관련 뉴스를 검색해서 요약해줘."
     response = agent_executor.invoke({"input": user_query})
     print("\n[최종 답변]:\n", response["output"])
@@ -270,7 +272,7 @@ def part_09_02():
     # 2. 모델 초기화 및 도구 바인딩
 
     # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
 
     # bind_tools로 모델에게 "필요하면 이 도구를 써도 좋아"라고 JSON 스키마를 전달
 
@@ -354,7 +356,7 @@ def part_09_02():
 
 
     # llm = ChatOpenAI(model="gpt-4o", temperature=0)
-    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
 
     agent = create_openai_functions_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
@@ -438,7 +440,7 @@ def part_09_02():
     # 2. 모델 초기화 및 도구 바인딩
 
     # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
     tools = [get_stock_price, get_exchange_rate, summarize_financials]
     llm_with_tools = llm.bind_tools(tools)
 
@@ -555,7 +557,7 @@ def part_09_03():
     # 2. 모델 초기화 및 도구 바인딩
 
     # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna")   # temperature 미지원 → 기본값(1)
 
     tools = [get_stock_price, get_exchange_rate, summarize_financials]
 
