@@ -913,6 +913,9 @@ def generate_output(model, text, system_prompt):
 
 
 # 5. 3개 데이터로 베이스 모델 generate 실행
+
+
+
 for i, text in enumerate(test_texts, 1):
     # print(f"\n===== 테스트 데이터 {i} (카테고리 힌트: 부동산/산업/증권) =====\n{text}\n")
     
@@ -932,4 +935,133 @@ for i, text in enumerate(test_texts, 1):
     print("----- 로라 모델 출력 -----\n", lora_output)
     
     print(f"\n===== {i}번째 비교 테스트 끝 =====\n")
+
+# ----- 베이스 모델 출력 -----
+#  {"category": "산업", "event_count": 4, "events": ["6·27 대출 규제 시행 후 도봉구 아파트 가격 상승세 유지", "도봉구 거래량은 7월 20일 기준 51건에 머물고 있다", "금관구 아파트 거래량은 7월 20일 기준 25건에 머물고 있다", "부동산업계 전문가가 서울 외곽 지역 시장 흐름에 대한 진단을 발표"]}
+# The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+# ----- 로라 모델 출력 -----
+#  {"category": "부동산","event_count": 2,"events": ["서울부동산정보광장에 따르면 도봉구 아파트 거래량은 5월 155건, 6월 289건으로 늘었지만, 7월 들어서는 20일 기준 51건에 머물고 있다.", "서울부동산정보광장에 따르면 금천구 아파트 거래량은 5월 74건에서 6월 135건으로 증가한 뒤, 7월(20일 기준)에는 25건에 그쳤다."]}
+
+# ===== 1번째 비교 테스트 끝 =====
+
+# ----- 베이스 모델 출력 -----
+#  답변:
+# {"category": "산업", "event_count": 4, "events": ["한일시멘트가 자회사 한일현대시멘트를 흡수 합병 결정", "시멘트 산업의 경영상황 악화", "업계 전반의 대응은 신중한 모습", "시멘트 제조 시 온실가스 배출량 증가로 탄소중립 목표 설정"]}
+# The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+
+# ----- 로라 모델 출력 -----
+#  {"category": "산업","event_count": 2,"events": ["20일 관련 업계에 따르면 한일시멘트는 최근 이사회를 열고 77.78% 지분을 보유한 한일현대시멘트를 오는 11월 1일부로 흡수 합병하기로 의결했다.", "이 가운데 업계는 환경·사회·지배구조(ESG) 전환에도 동시에 대응 중이다."]}
+
+# ===== 2번째 비교 테스트 끝 =====
+
+# ----- 베이스 모델 출력 -----
+#  답변:
+# {"category": "산업", "event_count": 10, "events": ["인공지능(AI) 분야 경쟁이 '매그니피센트 세븐' 기업 주가에 심화되며, 주가 차별화가 뚜렷해졌습니다.", "Amazon, Alphabet, Apple, Meta, Microsoft, NVIDIA, Tesla의 주가가 AI 성과에 따라 크게 갈리고 있습니다.", "S&P 500에서 7개 기업이 차지하는 비중은 35%에 달하며, 2분기 순이익이 전년 동기 대비 14% 증가했습니다.", "Alphabet과 Tesla는 주가가 20% 이상 상승했으나, Apple은 16% 하락했고, Alphabet은 2% 내렸습니다.", "Amazon은 관세 영향으로 전자상거래 부문에 타격을 받았지만, 3% 올랐습니다.", "Alphabet과 Tesla는 23일 분기 실적 발표를, Meta, Microsoft, Apple는 다음 주에 발표할 예정입니다.", "이바나 델레브스카는 7개 기업이 AI 분야 선봉에 있는 이유를 강조하며, 펀더멘털 차이가 뚜렷하다고 평가했습니다.", "Harry Ferguson의 제이미 콕스는 테크 대기업 간 실적 차이로 주가 흐름이 차별화된다고 평가했습니다.", "NVIDIA는 주가가 20% 이상 상승했으나, Apple은 16% 하락했고, Tesla는 18% 하락했습니다."]}
+
+# {"category": "산업", "event_count": 10, "events": ["인공지능(AI) 분야 경쟁이 '매그니피센트 세븐' 기업 주가에 심화되며, 주가 차별화가 뚜렷해졌습니다.", "Amazon, Alphabet, Apple, Meta, Microsoft, NVIDIA, Tesla의 주가가 AI 성과에 따라 크게 갈리고 있습니다.", "S&P 500에서 7개 기업이 차지하는 비중은 35%에 달하며, 2분기 순이익이 전년 동기 대비 14% 증가했습니다.", "Alphabet과 Tesla는 주가가 20% 이상 상승했으나, Apple은 16% 하락했고, Alphabet은 2% 내렸습니다.", "Amazon은 관세 영향으로 전자상거래 부문에 타격을 받았지만, 3% 올랐습니다.", "Alphabet과 Tesla는 23일 분기 실적 발표를, Meta, Microsoft, Apple는 다음 주에 발표할 예정입니다.", "이바나 델레브스카는 7개 기업이 AI 분야 선봉에 있는 이유를 강조하며, 펀더멘털 차이가 뚜렷하다고 평가했습니다.", "Harry Ferguson의 제이미 콕스는 테크 대기업 간 실적 차이로 주가 흐름이 차별화된다고 평가했습니다.", "NVIDIA는 주가가 20% 이상 상승했으나, Apple은 16% 하락했고, Tesla는 18% 하락했습니다."]}
+
+# {"category": "산업", "event_count": 10, "events": ["인공지능(AI) 분야 경쟁이 '매그니피센트 세븐' 기업 주가에 심화되며, 주가 차별화가 뚜렷해졌습니다.", "Amazon, Alphabet, Apple, Meta, Microsoft, NVIDIA, Tesla의 주가가 AI 성과에 따라 크게 갈리고 있습니다.", "S&P 500에서 7개 기업이 차지하는 비중은 35%에 달하며, 2분기 순이익이 전년 동기 대비 14% 증가했습니다.", "Alphabet과 Tesla는 주가가 20% 이상 상승했으나, Apple은 16% 하락했고, Alphabet은 2% 내렸습니다.", "Amazon은 관세 영향으로 전자상거래 부문에 타격을 받았지만, 3% 올랐습니다.", "Alphabet과 Tesla는 23일 분기 실적 발표를, Meta, Microsoft, Apple는 다음 주에 발표할 예정입니다.", "이바나 델레브스
+# The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+# ----- 로라 모델 출력 -----
+#  {"category": "증권","event_count": 2,"events": ["올해 들어 엔비디아, 메타, MS의 주가는 약 20% 이상 올랐으나, 이와 대조적으로 애플은 16% 하락했고 알파벳도 2% 내렸고 테슬라는 18%가 빠졌다.", "AI 스타트업 '앤스로픽'에 투자한 아마존은 관세 등의 영향으로 전자상거래 부문 사업에 타격이 상당히 큰 가운데서도 3% 올랐다."]}
+
+# ===== 3번째 비교 테스트 끝 =====
+
+# 베이스 모델은 기사 내용과 관계없이 거의 다 "산업"으로 답합니다. LoRA 모델은 세 개 모두 맞혔습니다.
+# 베이스 모델: 프롬프트에 있던 답변:을 따라 쓰고, 3번 기사에서는 JSON을 반복 생성했습니다. 09에서 max_new_tokens=1024로 바꾼 이유가 이런 반복 때문입니다.
+# LoRA 모델: 학습 데이터와 똑같은 형식("category": "부동산","event_count": 2,..., 쉼표 뒤 공백 없음)으로 JSON만 출력합니다. 03_2 평가에서 JSON을 읽어 들이기(파싱) 쉬워집니다.
+
+# 이벤트 문장
+# 베이스 모델: "전문가가 진단을 발표"처럼 요약하거나 고쳐 쓰고, 수치 변화가 아닌 내용도 넣습니다.
+# LoRA 모델: 원문 문장을 그대로 뽑고, 수치의 증감이 있는 문장(거래량 155건→289건, 주가 20% 상승·16% 하락)을 고릅니다. 데이터셋의 정답 기준(증감·변화·변동 문장)을 그대로 배운 것입니다.
+
+# 주의할 점
+## 이벤트 개수가 늘 2개입니다. 학습 데이터에서 이벤트가 2개인 기사가 대부분이라(3개 이상은 약 29%), 모델이 2개로 치우쳐 있을 수 있습니다. 이벤트가 더 많은 기사에서는 덜 뽑을 가능성이 있습니다.
+## 샘플이 3개뿐입니다. 정확한 판단은 03_2 평가에서 합니다. 학습에 쓰지 않은 326건으로 파싱 성공률, 카테고리 정확도, 개수 정확도, ROUGE를 수치로 비교합니다. 참고로 책의 결과는 카테고리 정확도 0.08 → 0.89, 개수 정확도 0.06 → 0.64였습니다.
+
+
+
+## 03_01_10
+
+# 토큰은 코드에 쓰지 않고, 터미널에서 `uv run hf auth login`으로 저장한 토큰을 쓴다 (README 참고)
+
+# from huggingface_hub import login
+from huggingface_hub import whoami
+
+# HF_TOKEN = "your_huggingface_token_here"  # 본인의 토큰으로 대체
+
+# repo_id = "sogm1/qwen3-1.7b-news-event-merged"  # 원하는 레포지토리명
+
+hf_user = whoami()["name"]                                   # 로그인이 안 돼 있으면 여기서 오류
+# repo_id = f"{hf_user}/qwen3-1.7b-news-event-merged"         # 내 계정 아래에 만든다
+# merged_dir = "./qwen3-merged"  # 병합 모델을 저장할 로컬 폴더
+repo_id = f"{hf_user}/qwen3-1.7b-news-event-lora"           # 어댑터만 올리는 저장소
+adapter_dir = "./qwen3-lora-ft-final"                       # 03_01_07에서 저장한 LoRA 어댑터 폴더
+
+# Hugging Face에 로그인
+# print("허깅페이스에 로그인 중...")
+# login(token=HF_TOKEN)
+# print("로그인 성공!")
+print("로그인 계정:", hf_user, "| 업로드할 저장소:", repo_id)
+
+# 로그인 계정: HaloJEon | 업로드할 저장소: HaloJEon/qwen3-1.7b-news-event-merged
+
+# 레포지토리 생성
+from huggingface_hub import create_repo
+
+print(f"레포지토리 {repo_id} 생성 중...")
+try:
+    create_repo(
+        repo_id=repo_id,
+        repo_type="model",  # 모델 레포지토리로 지정
+        # private=False,      # 공개 레포지토리 (True로 설정하면 비공개)
+        private=True,         # 비공개 (뉴스 기사로 학습한 연습용 어댑터)
+        exist_ok=True       # 이미 존재하면 무시
+    )
+    print(f"레포지토리 생성 완료: https://huggingface.co/{repo_id}")
+    
+except Exception as e:
+    print(f"레포지토리 생성 중 오류: {e}")
+
+# 병합 모델(약 3.4GB) 대신 어댑터만 올리므로 병합·로컬 저장은 하지 않는다.
+
+# merged_model = lora.merge_and_unload()
+# print("모델 병합 완료!")
+#
+# os.makedirs(merged_dir, exist_ok=True)
+#
+#
+# # 모델과 토크나이저를 로컬에 저장
+# merged_model.save_pretrained(merged_dir)
+# tokenizer.save_pretrained(merged_dir)
+# print("로컬 저장 완료!")
+
+# Hugging Face Hub에 업로드
+from huggingface_hub import upload_folder
+from huggingface_hub import constants as hf_constants
+
+# HF_HOME이 Windows 드라이브(/mnt/c)에 있으면 Xet 전송이 파일 오류로 실패하므로 일반 HTTP로 올린다
+hf_constants.HF_HUB_DISABLE_XET = True
+
+try:
+    upload_folder(
+        # folder_path=merged_dir,
+        folder_path=adapter_dir,
+        repo_id=repo_id,
+        repo_type="model",
+        # commit_message="Upload merged Qwen3-1.7B model fine-tuned for Korean news event extraction"
+        commit_message="Upload Qwen3-1.7B LoRA adapter fine-tuned for Korean news event extraction"
+    )
+
+    print("업로드 완료!")
+    print(f"모델 URL: https://huggingface.co/{repo_id}")
+    # print(f"로컬 경로: {merged_dir}")
+    print(f"로컬 경로: {adapter_dir}")
+    
+except Exception as e:
+    print(f"업로드 중 오류 발생: {e}")
+
+# 업로드 완료!
+# 모델 URL: https://huggingface.co/HaloJEon/qwen3-1.7b-news-event-lora
+# 로컬 경로: ./qwen3-lora-ft-final
 
