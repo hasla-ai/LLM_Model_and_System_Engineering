@@ -1,12 +1,12 @@
 '''
-9장 LLM 에이전트 (책 9.3~9.6, OpenAI API)
-  09_01 ReAct               (9.3, chapter09_1_react.ipynb)
-  09_02 펑션 콜링            (9.4, chapter09_2_function_calling.ipynb)
-  09_03 예외 처리·병렬 실행   (9.5, chapter09_3_exception_parallel.ipynb)
-  09_04 Text-to-SQL          (9.6, chapter09_4_text_to_sql.ipynb)
+9장 LLM 에이전트 (OpenAI API)
 
-실행: uv run python 09_llm_agents.py 09_02 09_03    # 인자가 없으면 전체 실행
-'''
+  09_01 ReAct               
+  09_02 펑션 콜링           
+  09_03 예외 처리·병렬 실행  
+  09_04 Text-to-SQL         
+
+  '''
 
 import os, sys, getpass, asyncio
 
@@ -131,6 +131,7 @@ Thought:{agent_scratchpad}'''
     # 6. 모델 및 에이전트 실행기 구성
 
     # llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    # llm = ChatOpenAI(model="gpt-4o", temperature=0)
     llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
 
     agent = create_react_agent(llm, tools, react_prompt)
@@ -144,17 +145,15 @@ Thought:{agent_scratchpad}'''
     response = agent_executor.invoke({"input": user_query})
     print("\n[최종 답변]:\n", response["output"])
 
-
 def part_09_02():
     '''
     펑션 콜링: LLM이 도구 호출을 JSON(함수 이름 + 인자)으로 제안하고, 실제 실행은 코드가 한다
     09_02_01 함수 스키마 / 09_02_02 bind_tools / 09_02_03 FC + ReAct (멀티턴 메모리) / 09_02_04 병렬 도구 제안
     '''
 
-    ## 09_02_01 함수 스키마 되짚기 (책 9.4.1)
-    # LLM에게 전달되는 도구 설명서의 실제 모양 (bind_tools가 내부에서 이 형식을 만들어 줌)
+    ## 09_02_01 함수 스키마.
+    # LLM에게 전달되는 도구 설명서의 실제 모양
 
-    # 노트북은 셀의 마지막 값을 화면에 보여 주지만 .py는 그렇지 않으므로 변수에 담아 출력
     weather_schema = {
         "type": "function",
         "function": {
@@ -169,9 +168,12 @@ def part_09_02():
             }
         }
     }
+    # 노트북은 셀의 마지막 값을 화면에 보여 주지만 .py는 그렇지 않으므로 변수에 담아 출력
     print(weather_schema)
 
-    ## 09_02_02 bind_tools로 도구 붙이기 (책 9.4.2)
+    ## 09_02_02 bind_tools
+    # 날씨 도구(Open-Meteo)를 붙이면 LLM이 {'location': 'Seoul'}처럼 인자까지 뽑아서 제안함.
+    # "서울"을 영문으로 바꿔 넣는 것은 도구 설명(docstring)을 보고 판단한 결과.
 
     import requests
     import warnings
@@ -181,7 +183,9 @@ def part_09_02():
     from langchain_core.tools import tool
 
     # 1. 실제 날씨 API 도구 정의 (Open-Meteo 사용)
+
     @tool
+
     def get_weather(location: str) -> str:
         """특정 지역의 현재 날씨와 기온을 조회합니다.
         location: 조회할 도시 이름. (주의: API 검색을 위해 '서울'은 'Seoul'처럼 반드시 영문으로 번역해서 입력하세요)
@@ -206,6 +210,7 @@ def part_09_02():
 
     # 2. 모델 초기화 및 도구 바인딩
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
     # bind_tools로 모델에게 "필요하면 이 도구를 써도 좋아"라고 JSON 스키마를 전달
     llm_with_tools = llm.bind_tools([get_weather])
 
@@ -228,7 +233,12 @@ def part_09_02():
     else:
         print(response.content)
 
-    ## 09_02_03 펑션 콜링에 추론 교차를 얹기 (FC + ReAct, 책 9.4.3)
+
+    ## 09_02_03 펑션 콜링에 추론 교차를 얹기.
+
+    # 인자가 2개인 도구는 pydantic 스키마로 설명(StructuredTool).
+    # chat_history(이전 대화)와 agent_scratchpad(이번 질문의 도구 호출 과정)를 나눠서 멀티턴 대화를 기억함.
+    
 
     from langchain_classic.agents import AgentExecutor, create_openai_functions_agent
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -262,6 +272,7 @@ def part_09_02():
     ]
 
     # 2. 메모리가 포함된 프롬프트 설계
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", "너는 금융 데이터를 분석하는 전문 에이전트야. 도구를 사용하여 정확한 정보를 제공해."),
         MessagesPlaceholder(variable_name="chat_history"),      # 이전 턴들의 대화 (멀티턴)
@@ -270,11 +281,13 @@ def part_09_02():
     ])
 
     # 3. 모델 및 에이전트 설정
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
     agent = create_openai_functions_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
     # 4. 세션별 메모리 관리 (멀티턴의 핵심)
+
     demo_chat_history = ChatMessageHistory()
 
     conversational_agent_executor = RunnableWithMessageHistory(
@@ -285,13 +298,17 @@ def part_09_02():
     )
 
     # 5. 실행 (연쇄 사고 테스트)
+
     response = conversational_agent_executor.invoke(
         {"input": "최근 3개월 동안 삼성전자 주가 변동률과 관련 최신 뉴스 요약을 알려줘"},
         config={"configurable": {"session_id": "ch09_test_01"}}
     )
+
     print(response["output"])
 
-    ## 09_02_04 여러 도구를 한 번에 병렬 제안 (책 9.4.4)
+
+    ## 09_02_04 여러 도구를 한 번에 병렬 제안
+    # 질문 하나에 주가·환율·재무 도구 호출을 한 번에 여러 개 제안받아 차례로 실행    
 
     import yfinance as yf
 
