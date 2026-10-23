@@ -59,12 +59,17 @@ The book sets up Chapter 2 on Google Colab and Chapter 3 onward on RunPod cloud 
 | 3장 이후 · Chapter 3+ | RunPod 클라우드 GPU · RunPod cloud GPU | 로컬 CUDA GPU · Local CUDA GPU |
 | GPU | Colab T4 (16GB) 등 · and others | NVIDIA GeForce RTX 5060 Laptop GPU (8GB, Blackwell sm_120) |
 | 패키지 설치 · Install | 노트북 셀의 `!pip install` | `uv sync` ([pyproject.toml](pyproject.toml), [uv.lock](uv.lock)) |
-| 3장 실행 OS · Chapter 3 OS | RunPod (Linux) | WSL2 Ubuntu (같은 로컬 GPU) · WSL2 Ubuntu on the same GPU |
-| 9장 LLM · Chapter 9 LLM | Colab + OpenAI API (gpt-4o, gpt-4o-mini) | OpenAI API 그대로, GPU 불필요 (Windows·WSL 모두 가능) · OpenAI API, no GPU |
+| **실행 OS · OS** | Colab / RunPod (Linux) | **모든 장을 WSL2 Ubuntu 24.04에서 실행** (Windows는 VS Code 편집만) · All chapters run in WSL2 Ubuntu |
+| 9장 LLM · Chapter 9 LLM | Colab + OpenAI API (gpt-4o, gpt-4o-mini) | OpenAI API 그대로, GPU 불필요 · OpenAI API, no GPU |
 
-GPU 연산이 없는 코드(02_01·02_02의 순수 Python 구현, 02_03의 토크나이저)는 그대로 실행하고, 모델을 GPU에 올리는 코드는 02_04부터입니다. 3장은 WSL2 Ubuntu에서 실행합니다. 평가에 쓰는 vllm이 Linux에서만 동작하고, Windows용 PyTorch에는 FlashAttention이 없어 긴 시퀀스 학습에서 메모리가 크게 늘기 때문입니다([아래 참고](#wsl2-ubuntu에서-실행--running-on-wsl2-ubuntu)). 책의 예제가 8GB보다 큰 GPU 메모리를 전제로 하면, 로컬에 맞춰 조정한 내용을 이 README와 해당 코드에 기록합니다.
+**실행 환경은 WSL2 Ubuntu 하나로 고정합니다.** 코드는 Windows의 저장소 폴더에서 VS Code로 편집하고, 실행은 모두 Ubuntu에서 합니다([아래 참고](#wsl2-ubuntu에서-실행--running-on-wsl2-ubuntu)). Windows에서 실행하지 않는 이유는 세 가지입니다.
+- **vllm:** Linux에서만 동작합니다.
+- **FlashAttention:** Windows용 PyTorch에는 없어서, 긴 시퀀스 학습에서 메모리가 크게 늘어납니다.
+- **scikit-learn:** Windows의 애플리케이션 제어 정책이 DLL을 막아서, peft 0.19를 import할 수 없습니다.
 
-Code without GPU work (pure Python in 02_01 and 02_02, the tokenizer in 02_03) runs as is; loading models onto the GPU starts at 02_04. Chapter 3 runs in WSL2 Ubuntu, because vLLM is Linux-only and the Windows PyTorch build lacks FlashAttention, which makes long-sequence training use far more memory. If an example assumes more than 8GB of GPU memory, the local adjustments are recorded here and in the code.
+GPU 연산이 없는 코드(02_01·02_02의 순수 Python 구현, 02_03의 토크나이저)와 9장(OpenAI API)도 같은 환경에서 실행합니다. 모델을 GPU에 올리는 코드는 02_04부터입니다. 책의 예제가 8GB보다 큰 GPU 메모리를 전제로 하면, 로컬에 맞춰 조정한 내용을 이 README와 해당 코드에 기록합니다.
+
+**The runtime is fixed to WSL2 Ubuntu.** Code is edited on Windows in VS Code, and everything runs in Ubuntu, because vLLM is Linux-only, the Windows PyTorch build lacks FlashAttention, and Windows Application Control blocks scikit-learn's DLL (needed by peft 0.19). Code without GPU work and Chapter 9 (OpenAI API) run in the same environment. If an example assumes more than 8GB of GPU memory, the local adjustments are recorded here and in the code.
 
 ## 코드 변경 원칙 | Code Conventions
 
@@ -126,9 +131,9 @@ The book's Chapter 3 training assumes an 80GB RunPod GPU. Run as is, it far exce
 
 ## 로컬 CUDA 설정 및 실행 | Local CUDA Setup
 
-이 프로젝트는 Python 3.12와 [uv](https://docs.astral.sh/uv/)를 사용하는 독립 프로젝트입니다. `uv sync`를 실행하면 저장소 안에 `.venv`가 만들어집니다. 직접 의존성은 [pyproject.toml](pyproject.toml)에, 재현 가능한 전체 의존성 버전은 [uv.lock](uv.lock)에 기록합니다. 소스 파일은 주제별 폴더로 옮기지 않고 저장소 루트에 둡니다.
+이 프로젝트는 Python 3.12와 [uv](https://docs.astral.sh/uv/)를 사용하는 독립 프로젝트입니다. 실행용 가상환경은 Ubuntu의 `~/.venvs/llm_serve`에 만들어집니다(아래 `llm` 명령). 저장소 안의 `.venv`는 Windows VS Code의 자동 완성용으로만 씁니다. 직접 의존성은 [pyproject.toml](pyproject.toml)에, 재현 가능한 전체 의존성 버전은 [uv.lock](uv.lock)에 기록합니다. 소스 파일은 주제별 폴더로 옮기지 않고 저장소 루트에 둡니다.
 
-This is a standalone project using Python 3.12 and [uv](https://docs.astral.sh/uv/); `uv sync` creates `.venv` inside the repository. Direct dependencies are declared in [pyproject.toml](pyproject.toml), with resolved versions recorded in [uv.lock](uv.lock). Source files stay in the repository root rather than being split into topic folders.
+This is a standalone project using Python 3.12 and [uv](https://docs.astral.sh/uv/). The runtime virtual environment lives at `~/.venvs/llm_serve` in Ubuntu (see the `llm` command below); the repository's `.venv` is only for VS Code completion on Windows. Direct dependencies are declared in [pyproject.toml](pyproject.toml), with resolved versions recorded in [uv.lock](uv.lock). Source files stay in the repository root rather than being split into topic folders.
 
 | 패키지 · Package | 버전 · Version | 책 기준 · Book | 용도 · Purpose |
 | --- | --- | --- | --- |
@@ -163,22 +168,23 @@ The current environment follows the book's Chapter 4 (VLM) versions, pinned to w
 - **2·3장 결과는 이전 환경에서 실행한 것입니다.** 커밋 `71884ef` 기준으로 transformers 4.55.2, accelerate 1.8.1, trl 0.19.0, peft 0.10.0, datasets 5.0.1, vllm 0.10.2입니다. 그대로 다시 실행하려면 `git checkout 71884ef -- pyproject.toml uv.lock` 후 `uv sync --locked`를 실행합니다.
 - **torch 2.8.0 (CUDA 12.8):** 책 3·4장이 지정한 버전이고, vllm 0.10.2와 0.11.0 모두 이 버전을 정확히 요구합니다. CUDA 12.8 빌드라서 RTX 50 시리즈(Blackwell, CUDA 12.8 이상 필요)와 `bitsandbytes 0.46.0`(CUDA 12.8까지 지원) 조건도 만족합니다. PyTorch는 PyPI가 아니라 [CUDA 12.8용 저장소](https://download.pytorch.org/whl/cu128)에서 받습니다.
 - **Python 3.12:** vllm이 Python 3.14를 지원하지 않고, 책의 RunPod 환경도 Python 3.12입니다.
-- **Windows 주의:** peft 0.19는 내부에서 scikit-learn을 불러오는데, Windows의 애플리케이션 제어 정책이 scikit-learn의 DLL을 막을 수 있습니다. 3·4장은 WSL2 Ubuntu에서 실행합니다.
+- **Windows 주의:** peft 0.19는 내부에서 scikit-learn을 불러오는데, Windows의 애플리케이션 제어 정책이 scikit-learn의 DLL을 막을 수 있습니다. 그래서 모든 실행은 WSL2 Ubuntu에서 합니다.
 
-Add dependencies with `uv add package==version` instead of `pip install`. Each chapter of the book pins different versions (Chapter 3: transformers 4.53.0, trl 0.19.0, peft 0.10.0, vLLM 0.10.2; Chapter 4: transformers ≥4.57, trl 0.29.1, peft 0.19.1, vLLM 0.11.0), so the environment follows the latest chapter. Chapter 2 and 3 results were produced with the environment at commit `71884ef`; restore it with `git checkout 71884ef -- pyproject.toml uv.lock` and `uv sync --locked`. torch 2.8.0 (CUDA 12.8) is what both vLLM versions require and supports RTX 50-series GPUs and `bitsandbytes 0.46.0`. Python is limited to 3.12. On Windows, peft 0.19 imports scikit-learn, whose DLL may be blocked by Application Control, so Chapters 3 and 4 run in WSL2 Ubuntu.
+Add dependencies with `uv add package==version` instead of `pip install`. Each chapter of the book pins different versions (Chapter 3: transformers 4.53.0, trl 0.19.0, peft 0.10.0, vLLM 0.10.2; Chapter 4: transformers ≥4.57, trl 0.29.1, peft 0.19.1, vLLM 0.11.0), so the environment follows the latest chapter. Chapter 2 and 3 results were produced with the environment at commit `71884ef`; restore it with `git checkout 71884ef -- pyproject.toml uv.lock` and `uv sync --locked`. torch 2.8.0 (CUDA 12.8) is what both vLLM versions require and supports RTX 50-series GPUs and `bitsandbytes 0.46.0`. Python is limited to 3.12. On Windows, peft 0.19 imports scikit-learn, whose DLL may be blocked by Application Control, so everything runs in WSL2 Ubuntu.
 
-```powershell
-# 저장소 폴더에서 실행
-uv sync
+```bash
+# Ubuntu에서 실행 (llm: 저장소 폴더로 이동 + Linux 가상환경·HF 캐시 지정, 아래 WSL 절 참고)
+llm
+uv sync --locked
 
 # GPU 인식 확인 (True와 GPU 이름이 나와야 함)
 uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 
 # 채팅 토크나이저와 템플릿 확인
-uv run python .\02_03_llm_chat_template.py
+uv run python 02_03_llm_chat_template.py
 
 # 4비트 양자화 모델 로드와 GPU 추론
-uv run python .\02_04_llm_inference.py
+uv run python 02_04_llm_inference.py
 ```
 
 **02_03:** 처음 실행할 때 `openai/gpt-oss-20b` 토크나이저 파일을 Hugging Face에서 내려받으므로 인터넷 연결이 필요합니다. 모델 가중치는 내려받지 않습니다. 정상 실행 여부는 Transformers 버전(2장 실행 당시 `4.55.2`), 토큰 ID를 디코딩한 문장이 원문과 같은지, 채팅 템플릿이 어시스턴트 생성 위치까지 출력하는지, 마지막 결과가 PyTorch 텐서인지 확인하면 됩니다.
@@ -191,13 +197,13 @@ uv run python .\02_04_llm_inference.py
 
 ### WSL2 Ubuntu에서 실행 | Running on WSL2 Ubuntu
 
-3장은 WSL2 Ubuntu에서 실행합니다. 이유는 두 가지입니다.
+모든 장을 WSL2 Ubuntu에서 실행합니다. 이 환경을 고른 근거는 다음과 같습니다.
 - **vllm:** Linux용 패키지만 있어서 Windows에서는 설치되지 않습니다(`sys_platform == 'linux'`일 때만 설치).
 - **FlashAttention:** Linux용 PyTorch에는 들어 있습니다. PyTorch 2.8은 sm80~sm121을 지원하므로 RTX 5060(sm_120)에서 GQA와 함께 동작합니다.
 
 WSL2는 Windows의 NVIDIA 드라이버로 같은 GPU를 쓰므로, Ubuntu 안에 드라이버를 따로 설치하지 않습니다. 코드는 Windows의 저장소 폴더에서 VS Code로 편집하고, Ubuntu에서는 그 폴더(`/mnt/c/...`)를 그대로 실행합니다. Linux용 가상환경은 Windows `.venv`와 섞이지 않도록 Ubuntu 홈 폴더에 따로 만듭니다. Hugging Face 캐시는 Windows 쪽을 함께 써서 모델을 다시 받지 않습니다.
 
-Chapter 3 runs in WSL2 Ubuntu: vLLM ships Linux wheels only, and the Linux PyTorch build includes FlashAttention, which in PyTorch 2.8 supports sm80–sm121, so it runs with GQA on the RTX 5060 (sm_120). WSL2 uses the GPU through the Windows NVIDIA driver, so do not install a driver inside Ubuntu. Code is edited on Windows and run from the same folder (`/mnt/c/...`) in Ubuntu, with a separate Linux virtual environment in the Ubuntu home folder and the Windows Hugging Face cache shared to avoid re-downloads.
+All chapters run in WSL2 Ubuntu: vLLM ships Linux wheels only, and the Linux PyTorch build includes FlashAttention, which in PyTorch 2.8 supports sm80–sm121, so it runs with GQA on the RTX 5060 (sm_120). WSL2 uses the GPU through the Windows NVIDIA driver, so do not install a driver inside Ubuntu. Code is edited on Windows and run from the same folder (`/mnt/c/...`) in Ubuntu, with a separate Linux virtual environment in the Ubuntu home folder and the Windows Hugging Face cache shared to avoid re-downloads.
 
 ```powershell
 # Windows PowerShell: Ubuntu 설치 (처음 한 번, Linux 사용자 이름과 비밀번호를 정함)
