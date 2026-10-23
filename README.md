@@ -111,6 +111,7 @@ The book's Chapter 3 training assumes an 80GB RunPod GPU. Run as is, it far exce
 | 비교 모델 로드 (08) | 베이스·LoRA 모델 두 벌 (6.9GB) | 베이스 한 벌 + 어댑터, `disable_adapter()`로 베이스 출력 | 메모리 절반 |
 | 생성 길이 (09) | `max_length=8192` | `max_new_tokens=1024` | 반복 생성 방지, 03_2 평가와 같은 기준 |
 | RunPod 캐시 (01) | `/workspace` 캐시 지정 | 주석 처리 | 로컬은 기본 Hugging Face 캐시 사용 |
+| vLLM 메모리 (03_02) | `gpu_memory_utilization` 기본 0.9 (80GB 중 71.3GiB) | `0.75` (5.97GiB) | 0.9(7.2GB)는 Windows가 쓰는 VRAM 때문에 시작 단계에서 실패. KV 캐시 1.29GiB = 12,080토큰, 동시 처리 1.47개 |
 
 **결과 (RTX 5060 Laptop 8GB, WSL2):**
 - **사전 시험:** 가장 긴 샘플(6,885토큰) 기준 최대 GPU 메모리 4.84GB, 스텝당 8.9초
@@ -190,7 +191,7 @@ wsl --install -d Ubuntu-24.04
 ```bash
 # Ubuntu 안에서 실행 (처음 한 번)
 nvidia-smi                                   # Windows 드라이버로 GPU가 보이는지 확인
-sudo apt update && sudo apt install -y git build-essential
+sudo apt update && sudo apt install -y git build-essential python3.12-dev   # Python.h: vLLM 시작 시 Triton C 확장 컴파일에 필요
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.local/bin/env
 

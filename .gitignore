@@ -7,3 +7,6 @@ qwen3-lora-ft/
 qwen3-lora-ft-final/
 qwen3-lora-test/
 qwen3-merged/
+base_eval.csv
+lora_eval.csv
+comparison.csv
