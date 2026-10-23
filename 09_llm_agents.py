@@ -171,6 +171,7 @@ def part_09_02():
     print(weather_schema)
 
     ## 09_02_02 bind_tools
+
     # 날씨 도구(Open-Meteo)를 붙이면 LLM이 {'location': 'Seoul'}처럼 인자까지 뽑아서 제안함.
     # "서울"을 영문으로 바꿔 넣는 것은 도구 설명(docstring)을 보고 판단한 결과.
 
@@ -191,34 +192,43 @@ def part_09_02():
         """
         try:
             # Step 1: 도시 이름을 위도 경도로 변환 (Geocoding API)
+
             geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1&language=ko"
             geo_resp = requests.get(geo_url).json()
             if "results" not in geo_resp:
                 return f"{location}의 좌표를 찾을 수 없습니다. 도시 이름을 영어로 다시 시도해보세요."
             lat = geo_resp["results"][0]["latitude"]
             lon = geo_resp["results"][0]["longitude"]
+
             # Step 2: 위경도를 바탕으로 현재 기온 풍속 조회 (Forecast API)
+
             weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
             weather_resp = requests.get(weather_url).json()
             current = weather_resp.get("current_weather", {})
             temp = current.get("temperature", "알 수 없음")
             windspeed = current.get("windspeed", "알 수 없음")
             return f"{location}의 현재 기온은 {temp}도이며, 풍속은 {windspeed}km/h입니다."
+        
         except Exception as e:
             return f"날씨 정보를 불러오는 중 에러가 발생했습니다: {e}"
 
     # 2. 모델 초기화 및 도구 바인딩
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
 
     # bind_tools로 모델에게 "필요하면 이 도구를 써도 좋아"라고 JSON 스키마를 전달
+
     llm_with_tools = llm.bind_tools([get_weather])
 
     # 3. 모델 호출
+
     user_query = "지금 서울 날씨 어때? 덥진 않아?"
     response = llm_with_tools.invoke(user_query)
 
     # 4. Function Calling 결과 파싱 및 실행
     # 모델이 일반 텍스트 대신 함수 호출(tool_calls)을 제안했는지 확인
+
     if response.tool_calls:
         tool_call = response.tool_calls[0]
         name = tool_call["name"]
@@ -226,9 +236,12 @@ def part_09_02():
         print(f"[LLM의 판단 (Function Calling)]")
         print(f"호출할 함수: {name}")
         print(f"추출된 인자: {args}\n")
+
         # 5. 애플리케이션 단에서 실제 파이썬 함수를 실행
+
         result = get_weather.invoke(args)
         print(f"[실측 데이터 결과]\n{result}")
+
     else:
         print(response.content)
 
@@ -247,6 +260,7 @@ def part_09_02():
     from pydantic import BaseModel, Field
 
     # 1. 도구(Tools) 정의 (실제 API 대신 고정된 문자열을 돌려주는 예시 도구)
+
     def get_stock_history(symbol: str, period: str):
         # 실제 환경에서는 DB나 API에서 기간별 데이터를 가져오는 로직이 들어갑니다.
         return f"{symbol}의 {period} 동안 주가는 96,500원에서 190,000원으로 96.9% 상승했습니다."
@@ -254,8 +268,10 @@ def part_09_02():
     def get_financial_news(symbol: str):
         return f"{symbol} 관련 뉴스: 차세대 AI 메모리 HBM4의 양산 소식과 가격 인상 협상에 따른 수익성 개선 기대감 고조."
 
-    # 인자가 2개인 도구는 pydantic 스키마로 각 인자의 이름·설명을 알려 준다
+    # 인자가 2개인 도구는 pydantic 스키마로 각 인자의 이름·설명을 알려줌.
+
     class StockHistoryInput(BaseModel):
+
         symbol: str = Field(description="주가 이력을 조회할 종목 코드 또는 이름")
         period: str = Field(description="주가 이력을 조회할 기간 (예: '최근 3개월', '1년')")
 
@@ -281,8 +297,10 @@ def part_09_02():
 
     # 3. 모델 및 에이전트 설정
 
+
     # llm = ChatOpenAI(model="gpt-4o", temperature=0)
     llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+
     agent = create_openai_functions_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
@@ -308,12 +326,16 @@ def part_09_02():
 
 
     ## 09_02_04 여러 도구를 한 번에 병렬 제안
+
     # 질문 하나에 주가·환율·재무 도구 호출을 한 번에 여러 개 제안받아 차례로 실행    
 
     import yfinance as yf
 
+
     # 1. 실제 금융 데이터 API 도구 (Yahoo Finance 연동)
+
     @tool
+
     def get_stock_price(symbol: str) -> str:
         """특정 종목의 실시간 주가 정보를 조회합니다.
         주의: 한국 주식은 반드시 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
@@ -327,6 +349,7 @@ def part_09_02():
             return f"주가 정보를 가져오는 데 실패했습니다. 심볼을 확인해주세요: {symbol}"
 
     @tool
+
     def get_exchange_rate(currency_pair: str = "USDKRW=X") -> str:
         """환율 정보를 조회합니다. 기본값은 USD/KRW 환율을 의미하는 'USDKRW=X'입니다."""
         try:
@@ -337,6 +360,7 @@ def part_09_02():
             return f"환율 정보를 가져오는 데 실패했습니다: {currency_pair}"
 
     @tool
+
     def summarize_financials(symbol: str) -> str:
         """특정 기업의 재무 요약 정보(매출, 영업이익률 등)를 제공합니다.
         주의: 한국 주식은 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
@@ -355,57 +379,83 @@ def part_09_02():
         except Exception as e:
             return f"재무 정보를 불러오는 데 실패했습니다: {symbol}"
 
+
     # 2. 모델 초기화 및 도구 바인딩
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
     tools = [get_stock_price, get_exchange_rate, summarize_financials]
     llm_with_tools = llm.bind_tools(tools)
 
+
     # 3. 에이전트 실행 로직 (한 번의 응답에 tool_calls가 여러 개 들어올 수 있음)
+
     user_input = "삼성전자 주가와 현재 환율, 그리고 삼성전자의 재무 상태를 요약해줘."
     ai_msg = llm_with_tools.invoke(user_input)
 
+
     # 4. 도구 호출 제안 확인 및 실제 실행
+
     if ai_msg.tool_calls:
+
         print("=== [LLM의 도구 호출 제안 및 실행 결과] ===\n")
+
         for tool_call in ai_msg.tool_calls:
+
             # tool_call["name"]과 실제 함수 객체를 매핑
+
             selected_tool = {
                 "get_stock_price": get_stock_price,
                 "get_exchange_rate": get_exchange_rate,
                 "summarize_financials": summarize_financials
             }[tool_call["name"].lower()]
+
             # 도구 실제 실행
+
             tool_output = selected_tool.invoke(tool_call["args"])
             print(f"[실행 도구]: {tool_call['name']}")
             print(f"[입력 파라미터]: {tool_call['args']}")
             print(f"[실측 결과]: {tool_output}\n")
+
     else:
         print(ai_msg.content)
 
 
 def part_09_03():
+
     '''
     예외 처리와 병렬 실행: 도구 호출이 실패하거나 LLM이 인자를 잘못 줄 때 버티는 방법, 여러 도구를 동시에 실행하는 방법
     09_03_01 준비 / 09_03_02 유효성 검사(pydantic) / 09_03_03 재시도(tenacity) / 09_03_04 세 기법 통합 / 09_03_05 병렬 실행(asyncio)
     '''
 
-    ## 09_03_01 준비: 09_03_05 병렬 실행에서 쓸 도구와 tool_calls(ai_msg) 만들기 (09_02_04와 같은 코드)
+    ## 09_03_01 준비
+    # 09_03_05 병렬 실행에서 쓸 도구와 tool_calls(ai_msg) 만들기 (09_02_04와 같은 코드)
+    # 09_02_04와 같은 도구 3개로 ai_msg(도구 호출 제안 3개)를 만들어 둠
 
     # import nest_asyncio; nest_asyncio.apply()   # .py에서는 필요 없음 (09_00 참고)
 
     import yfinance as yf
+
     import warnings
     warnings.filterwarnings("ignore")  # 불필요한 경고 메시지 숨김
 
     from langchain_openai import ChatOpenAI
+
     from langchain_core.tools import tool
 
+
+
     # 1. 실제 금융 데이터 API 도구 (Yahoo Finance 연동)
+
     @tool
+
     def get_stock_price(symbol: str) -> str:
-        """특정 종목의 실시간 주가 정보를 조회합니다.
+
+        """
+        특정 종목의 실시간 주가 정보를 조회합니다.
         주의: 한국 주식은 반드시 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
         """
+
         try:
             ticker = yf.Ticker(symbol)
             # fast_info를 사용하면 가볍고 빠르게 현재가를 가져옵니다.
@@ -414,7 +464,9 @@ def part_09_03():
         except Exception as e:
             return f"주가 정보를 가져오는 데 실패했습니다. 심볼을 확인해주세요: {symbol}"
 
+
     @tool
+
     def get_exchange_rate(currency_pair: str = "USDKRW=X") -> str:
         """환율 정보를 조회합니다. 기본값은 USD/KRW 환율을 의미하는 'USDKRW=X'입니다."""
         try:
@@ -425,6 +477,7 @@ def part_09_03():
             return f"환율 정보를 가져오는 데 실패했습니다: {currency_pair}"
 
     @tool
+
     def summarize_financials(symbol: str) -> str:
         """특정 기업의 재무 요약 정보(매출, 영업이익률 등)를 제공합니다.
         주의: 한국 주식은 종목코드 뒤에 '.KS'를 붙여야 합니다 (예: 삼성전자 -> 005930.KS).
@@ -443,51 +496,73 @@ def part_09_03():
         except Exception as e:
             return f"재무 정보를 불러오는 데 실패했습니다: {symbol}"
 
+
     # 2. 모델 초기화 및 도구 바인딩
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-6-luna", temperature=0)
+
     tools = [get_stock_price, get_exchange_rate, summarize_financials]
+
     llm_with_tools = llm.bind_tools(tools)
 
+
     # 3. 에이전트 실행 로직 (여기서 받은 ai_msg.tool_calls를 09_03_05에서 동시에 실행)
+
     user_input = "삼성전자 주가와 현재 환율, 그리고 삼성전자의 재무 상태를 요약해줘."
+
     ai_msg = llm_with_tools.invoke(user_input)
 
-    ## 09_03_02 유효성 검사 레이어 구축 (책 9.5.1)
-    # LLM이 넘긴 인자를 도구 실행 전에 검사한다. 규칙에 어긋나면 ValueError
+
+    # 09_03_02 유효성 검사(pydantic) 레이어 구축
+
+    # LLM이 넘긴 인자를 실행 전에 검사. 소문자 종목 코드면 ValueError.
 
     from pydantic import BaseModel, Field, field_validator
 
     class StockQuerySchema(BaseModel):
+
         symbol: str = Field(..., description="종목 코드")
 
         @field_validator("symbol")
+
         @classmethod
+
         def validate_symbol(cls, v: str):
             if not v.isupper():
                 raise ValueError("종목 코드는 반드시 대문자여야 합니다.")
             return v
 
-    ## 09_03_03 Tenacity를 이용한 재시도 메커니즘
-    # 일시적인 네트워크 오류는 기다렸다가 다시 시도한다 (정의만 하고 호출하지 않음, 주소는 예시용)
+
+    # 09_03_03 Tenacity를 이용한 재시도 메커니즘
+    # 일시적인 네트워크 오류는 4~10초 기다렸다가 최대 3번 다시 시도
+    # 주소는 예시
 
     import requests
     from tenacity import retry, stop_after_attempt, wait_exponential
 
     @retry(
+            
         stop=stop_after_attempt(3),                      # 최대 3번까지 재시도
         wait=wait_exponential(multiplier=1, min=4, max=10),  # 대기 시간을 지수적으로 증가
         reraise=True                                     # 3번 모두 실패하면 원래 예외 발생
     )
+
     def call_external_api(query):
         response = requests.get(f"https://api.finance.com/v1/{query}")
         response.raise_for_status()
         return response.json()
 
-    # 자율적 오류 수정(Self-Correction) 루프: 책은 설명만 있음.
+    # 자율적 오류 수정(Self-Correction) 루프 (추가)
+
     # 도구가 예외를 던지는 대신 "무엇이 틀렸는지" 문장을 돌려주면, 그 문장이 에이전트의 Observation이 되어
     # LLM이 인자를 고쳐서 다시 호출한다 (09_03_04의 except 블록이 이 역할).
 
+
     ## 09_03_04 세 가지 기법의 통합 (검증 + 재시도 + 오류 메시지 반환)
+
+    # 검증 → 재시도 → 실패하면 예외를 던지지 않고 "무엇이 틀렸는지" 문장을 돌려줌.
+    # 에이전트 안에서는 이 문장이 Observation이 되어 LLM이 인자를 고쳐 다시 호출함(Self-Correction).
 
     from langchain_classic.tools import StructuredTool
 
@@ -495,7 +570,9 @@ def part_09_03():
         symbol: str = Field(..., description="종목 코드 (반드시 대문자, 예: AAPL, 005930.KS)")
 
         @field_validator("symbol")
+
         @classmethod
+
         def validate_symbol(cls, v: str):
             if not v.isupper():
                 raise ValueError(f"종목 코드 '{v}'는 반드시 대문자여야 합니다. 예: AAPL, 005930.KS")
@@ -506,6 +583,7 @@ def part_09_03():
         wait=wait_exponential(multiplier=1, min=4, max=10),  # 대기 간격을 지수적으로 늘리되 4~10초로 제한
         reraise=True                                     # 3번 모두 실패 시 원래 예외 발생
     )
+
     def _fetch_stock_price_from_api(symbol: str) -> dict:
         """실제 외부 API를 호출하는 내부 함수. 에러 시 자동 재시도합니다."""
         response = requests.get(
@@ -523,15 +601,18 @@ def part_09_03():
             data = _fetch_stock_price_from_api(validated.symbol)
             price = data.get("price", "알 수 없음")
             return f"{validated.symbol}의 현재 주가는 {price}원입니다."
+        
         except ValueError as e:
             # Pydantic 검증 실패: LLM이 잘못된 형식으로 인자를 넘긴 경우
             # 이 메시지가 Observation으로 에이전트에 전달되어 Self-Correction을 트리거합니다.
             return f"입력값 오류: {e} 종목 코드를 대문자로 다시 입력해주세요."
+        
         except Exception as e:
             # API 호출 최종 실패 (3번 재시도 후에도 실패)
             return f"API 호출 실패: {e}. 잠시 후 다시 시도하거나 다른 종목을 조회해주세요."
 
     # AgentExecutor에 등록할 때는 StructuredTool로 래핑
+
     safe_stock_tool = StructuredTool(
         name="get_stock_price_safe",
         func=get_stock_price_safe,
@@ -540,13 +621,19 @@ def part_09_03():
     )
 
     # (추가) 동작 확인: 책은 정의만 하고 호출하지 않으므로 직접 불러 본다 (OpenAI API 호출 없음)
+
     # ① 소문자 → pydantic 검증에서 바로 걸려 "입력값 오류" 문장을 돌려줌 (네트워크 호출 없음)
     print(get_stock_price_safe("aapl"))
+
     # ② 대문자 → 검증 통과 후 예시 주소(api.finance.com) 호출이 실패 → 4초씩 기다리며 3번 시도한 뒤 "API 호출 실패"
     print(get_stock_price_safe("AAPL"))
 
-    ## 09_03_05 병렬 실행 (asyncio, 책 9.5.2)
-    # 09_02_04는 tool_calls를 for 문으로 하나씩 실행했다. 여기서는 동시에 실행한다.
+
+    ## 09_03_05 병렬 실행(asyncio)
+
+    # 09_02_04는 tool_calls를 for 문으로 하나씩 실행. 여기서는 동시에 실행.
+    # 09_02_04는 도구를 하나씩 실행했지만, 여기서는 asyncio.gather로 세 도구를 동시에 실행.
+    # 동기 함수인 yfinance는 asyncio.to_thread로 별도 스레드에서 실행
 
     import asyncio
 
@@ -557,23 +644,31 @@ def part_09_03():
     }
 
     async def call_one(tool_call):
+
         tool = selected_tool[tool_call["name"].lower()]
         # yfinance 호출은 동기(blocking) 함수이므로, 별도 스레드에서 실행해
         # 이벤트 루프를 막지 않도록 asyncio.to_thread로 감쌉니다.
+
         return await asyncio.to_thread(tool.invoke, tool_call["args"])
 
     async def run_parallel(ai_msg):
+
         # gather가 모든 호출을 동시에 시작하고, 전부 끝날 때까지 기다립니다.
+
         return await asyncio.gather(*[call_one(tc) for tc in ai_msg.tool_calls])
 
     # results = await run_parallel(ai_msg)  # 노트북에서는 nest_asyncio 덕분에 await를 바로 사용
-    results = asyncio.run(run_parallel(ai_msg))   # .py에는 최상위 await가 없으므로 asyncio.run으로 실행
+
+    results = asyncio.run(run_parallel(ai_msg))  
+    # .py에는 최상위 await가 없으므로 asyncio.run으로 실행
+
     for r in results:
         print(r)
 
 
 def part_09_04():
     ## 09_04_01 Text-to-SQL (작성 예정, hospital.db는 실행할 때 새로 만들어지므로 .gitignore)
+    
     print("09_04: 아직 작성 전")
 
 
